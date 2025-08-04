@@ -97,8 +97,14 @@ WINNER_ANNOTATIONS_FILE = os.path.join(DATA_DIR, "winner_annotations.csv")
 FINAL_ELO_RANKINGS_FILE = os.path.join(DATA_DIR, "final_elo_rankings.csv")
 DETAILED_SCORES_FILE = os.path.join(DATA_DIR, "detailed_scores.csv")
 
-# BLEURT checkpoint
-BLEURT_CHECKPOINT = os.path.join(BLEURT_DIR, "BLEURT-20")
+# GPU Configuration
+USE_GPU = False  # Set to False to use CPU mode
+GPU_MEMORY_GROWTH = True
+BATCH_SIZE = 16  # Reduced batch size for memory efficiency
+
+# BLEURT Configuration
+BLEURT_CHECKPOINT = 'bleurt/BLEURT-20'
+BLEURT_CPU_FALLBACK = True  # Fallback to CPU if GPU fails
 
 # Annotator mapping
 ANNOTATOR_MAPPING = {

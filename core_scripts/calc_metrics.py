@@ -26,16 +26,32 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = TF_CPP_MIN_LOG_LEVEL
 
 # Enable GPU memory growth to avoid OOM errors
 gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
+if gpus and USE_GPU:
     try:
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
         print(f"✅ GPU memory growth enabled for {len(gpus)} GPU(s)")
     except RuntimeError as e:
         print(f"⚠️ GPU memory growth setting failed: {e}")
+        USE_GPU = False
+else:
+    print("⚠️ Using CPU mode for BLEURT calculations")
+    USE_GPU = False
 
-# Initialize BLEURT scorer with GPU support
-scorer = score.BleurtScorer(checkpoint=BLEURT_CHECKPOINT)
+# Initialize BLEURT scorer with GPU support and CPU fallback
+try:
+    if USE_GPU:
+        scorer = score.BleurtScorer(checkpoint=BLEURT_CHECKPOINT)
+        print("✅ BLEURT initialized with GPU support")
+    else:
+        # Force CPU mode for BLEURT
+        with tf.device('/CPU:0'):
+            scorer = score.BleurtScorer(checkpoint=BLEURT_CHECKPOINT)
+        print("✅ BLEURT initialized with CPU support")
+except Exception as e:
+    print(f"❌ BLEURT initialization failed: {e}")
+    print("⚠️ Continuing without BLEURT scoring")
+    scorer = None
 
 print("TensorFlow version:", tf.__version__)
 print("GPU devices:", tf.config.list_physical_devices('GPU'))
@@ -116,18 +132,28 @@ class Metrics:
         """Optimized BLEURT computation with batch processing"""
         perf_monitor.start("BLEURT computation")
         
-        # Process in batches for better GPU utilization
+        # Check if BLEURT scorer is available
+        if scorer is None:
+            print("⚠️ BLEURT scorer not available, returning zeros")
+            perf_monitor.end("BLEURT computation")
+            return [0.0] * len(candidates)
+        
+        # Process in batches for better memory utilization
         scores = []
         for i in range(0, len(candidates), self.batch_size):
             batch_candidates = candidates[i:i + self.batch_size]
             batch_references = references[i:i + self.batch_size]
             
-            batch_scores = scorer.score(candidates=batch_candidates, references=batch_references)
-            scores.extend(batch_scores)
+            try:
+                batch_scores = scorer.score(candidates=batch_candidates, references=batch_references)
+                scores.extend(batch_scores)
+            except Exception as e:
+                print(f"⚠️ BLEURT batch failed: {e}, using zeros for batch")
+                scores.extend([0.0] * len(batch_candidates))
             
-            # Clear GPU memory after each batch
-            if gpus:
-                gc.collect()
+            # Clear memory after each batch
+            gc.collect()
+            if USE_GPU and gpus:
                 tf.keras.backend.clear_session()
         
         perf_monitor.end("BLEURT computation")
