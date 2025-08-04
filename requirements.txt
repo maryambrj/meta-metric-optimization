@@ -1,0 +1,30 @@
+# Core dependencies
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# Deep learning and NLP
+tensorflow>=2.20.0rc0
+nltk>=3.6.0
+rouge-score>=0.1.2
+tf-slim>=1.1
+sentencepiece
+datasets>=2.0.0
+
+# Jupyter and visualization
+jupyter>=1.0.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Progress bars
+tqdm>=4.62.0
+
+# JSON handling
+json5>=0.9.0
+
+# BLEURT (install from local directory)
+# Run: cd bleurt && pip install -e .
+
+# Optional: GPU support
+# tensorflow-gpu>=2.20.0rc0  # Uncomment if using GPU 
