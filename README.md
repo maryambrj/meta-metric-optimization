@@ -23,6 +23,16 @@ This framework evaluates text generation quality across multiple datasets using:
 - **Purpose**: Large-scale evaluation of metric correlation with human judgments
 - **Features**: Proper Elo ranking based on pairwise comparisons
 
+### 3. Summarize-from-Feedback Dataset (OpenAI) ⭐ **NEW**
+- **Size**: 64,832 summary comparisons from TL;DR dataset
+- **Task**: Summarization quality evaluation with human preferences
+- **Purpose**: Evaluate how well automated metrics align with human judgments in summarization
+- **Features**: 
+  - Original post text as reference
+  - Two summaries per comparison (winner vs loser based on human preference)
+  - Multiple model policies (supervised, RL, reward models)
+  - Real-world Reddit TL;DR summarization scenarios
+
 ## Key Features
 
 ### 🚀 GPU Acceleration
@@ -149,6 +159,26 @@ python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size 32
 │           ├── verbatim_values.csv
 │           ├── combined_metric_values.csv
 │           └── bootstrapped_spearman_plot.png
+│   │
+│   └── 📁 summarize_feedback/         # OpenAI Summarize-from-Feedback dataset
+│       ├── 📁 data/
+│       │   ├── summarize_feedback_processed.csv  # Processed comparison data
+│       │   ├── winner_annotations.csv            # Winner annotations
+│       │   ├── final_elo_rankings.csv           # Elo rankings
+│       │   └── detailed_scores.csv              # Detailed metric scores
+│       ├── 📁 annotations/
+│       │   ├── winner.json                      # Winner summaries
+│       │   └── loser.json                       # Loser summaries
+│       ├── 📁 processed_data/                   # Processed data
+│       ├── 📁 rankings/                         # Metric evaluation results
+│       │   ├── bleu_values.csv
+│       │   ├── bleurt_values.csv
+│       │   ├── meteor_values.csv
+│       │   ├── rouge_values.csv
+│       │   ├── verbatim_values.csv
+│       │   ├── combined_metric_values.csv
+│       │   └── bootstrapped_spearman_plot.png
+│       └── README.md                           # Dataset-specific documentation
 │
 └── 📁 bleurt/                         # BLEURT evaluation framework
     ├── README.md
@@ -165,23 +195,58 @@ python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size 32
 - **3 LLM Annotators**: Llama2, Llama3, Mistral
 - **20 Text Samples**: Diverse causal relation extraction tasks
 
-### 2. Comprehensive Metrics
+### 2. Summarization Evaluation (Summarize-from-Feedback) ⭐ **NEW**
+- **Reference**: Original post text (what should be summarized)
+- **Candidates**: Two summaries per comparison (winner vs loser based on human preference)
+- **Evaluation**: Metrics calculated for both summaries against the reference
+- **Correlation**: How well automated metrics align with human judgments
+- **64,832 Comparisons**: Large-scale evaluation across multiple model policies
+
+### 3. Comprehensive Metrics
 - **BLEU**: N-gram overlap scoring
 - **BLEURT**: Neural-based semantic similarity
 - **METEOR**: Alignment-based evaluation
 - **ROUGE**: Recall-oriented evaluation
 - **Verbatim**: Exact string matching
 
-### 3. Elo Ranking System
+### 4. Elo Ranking System
 - Competitive pairwise ranking of annotators
 - Dynamic score updates based on performance
 - Quality assessment independent of traditional metrics
 
-### 4. Meta-Metric Optimization
+### 5. Meta-Metric Optimization
 - Linear regression to find optimal metric weights
 - Spearman correlation analysis
 - Cross-validation with leave-samples-out approach
 
+
+## Dataset Selection Guide
+
+### Which Dataset Should You Use?
+
+#### 🎯 **For Summarization Evaluation** (Recommended)
+Use **Summarize-from-Feedback Dataset**:
+- **Best for**: Evaluating summarization quality metrics
+- **Why**: Specifically designed for summarization with human preferences
+- **Data**: Real Reddit TL;DR posts with human-judged summaries
+- **Size**: 64,832 comparisons across multiple model policies
+- **Command**: `python run_pipeline.py --dataset summarize_feedback`
+
+#### 🤖 **For General Text Generation Evaluation**
+Use **HH-RLHF Dataset**:
+- **Best for**: Evaluating general text generation quality
+- **Why**: Large-scale human preference data for dialogue responses
+- **Data**: Chosen vs rejected responses from human feedback
+- **Size**: Scalable to 161k samples
+- **Command**: `python run_pipeline.py --dataset hh_rlhf`
+
+#### 🔬 **For Annotator Quality Assessment**
+Use **Causal Relations Dataset**:
+- **Best for**: Comparing human vs LLM annotator quality
+- **Why**: Controlled environment with known ground truth
+- **Data**: Causal relation extraction from 7 humans + 3 LLMs
+- **Size**: 20 samples, 10 annotators
+- **Command**: `python run_pipeline.py --dataset causal_relations`
 
 ## Usage
 
@@ -196,12 +261,15 @@ python run_pipeline.py --step all --dataset causal_relations
 # 3. Or run HH-RLHF dataset
 python run_pipeline.py --step all --dataset hh_rlhf
 
-# 4. Run specific steps for a dataset
+# 4. Or run Summarize-from-Feedback dataset (recommended for summarization evaluation)
+python run_pipeline.py --step all --dataset summarize_feedback
+
+# 5. Run specific steps for a dataset
 python run_pipeline.py --step data --dataset hh_rlhf
 python run_pipeline.py --step metrics --dataset hh_rlhf
 python run_pipeline.py --step optimization --dataset hh_rlhf
 
-# 5. Test the complete pipeline
+# 6. Test the complete pipeline
 python test_hh_rlhf_pipeline.py
 
 # 6. Test comprehensive analysis (verifies all outputs match causal_relations)
@@ -238,6 +306,24 @@ cd core_scripts && python reg_test.py --dataset hh_rlhf
 
 # Linear Combination Optimization
 cd core_scripts && python linear_optimization.py --dataset hh_rlhf
+```
+
+#### For Summarize-from-Feedback Dataset ⭐ **NEW**
+```bash
+# Download and process summarize-feedback dataset
+cd core_scripts && python summarize_feedback_loader.py --split train --num_samples 1000
+
+# Calculate metrics for summarize-feedback (integrated into calc_metrics.py)
+cd core_scripts && python calc_metrics.py --dataset summarize_feedback
+
+# Regression Testing
+cd core_scripts && python reg_test.py --dataset summarize_feedback
+
+# Linear Combination Optimization
+cd core_scripts && python linear_optimization.py --dataset summarize_feedback
+
+# Test the complete pipeline
+python test_summarize_feedback_pipeline.py
 ```
 
 ### Pipeline Steps Explained
@@ -280,6 +366,28 @@ cd core_scripts && python linear_optimization.py --dataset hh_rlhf
    - Creates comprehensive visualizations and analysis
    - Output: `datasets/hh_rlhf/rankings/linear_optimization_results.csv`
 
+#### For Summarize-from-Feedback Dataset ⭐ **NEW**
+1. **Data Step** (`--step data --dataset summarize_feedback`):
+   - Downloads OpenAI summarize-from-feedback dataset from Azure Blob Storage
+   - Processes summary comparison pairs (winner vs loser based on human preference)
+   - Uses original post text as reference for metric evaluation
+   - Creates Elo rankings where human-preferred summaries are winners
+   - Output: `datasets/summarize_feedback/data/summarize_feedback_processed.csv`
+
+2. **Metrics Step** (`--step metrics --dataset summarize_feedback`):
+   - Uses original post text as reference (what should be summarized)
+   - Calculates BLEU, BLEURT, METEOR, ROUGE, and Verbatim scores for both summaries
+   - Compares winner and loser summaries against the reference text
+   - Creates ranking tables for metric-based evaluation
+   - Output: `datasets/summarize_feedback/rankings/*_values.csv` files
+
+3. **Optimization Step** (`--step optimization --dataset summarize_feedback`):
+   - Performs linear combination optimization to maximize Spearman correlation with human preferences
+   - Uses cross-validation to find optimal metric weights for summarization evaluation
+   - Compares metric rankings with human preference rankings (Elo)
+   - Creates comprehensive visualizations and analysis
+   - Output: `datasets/summarize_feedback/rankings/linear_optimization_results.csv`
+
 ## Output Files Generated
 
 Both datasets produce the same comprehensive analysis outputs:
@@ -314,6 +422,7 @@ Both datasets produce the same comprehensive analysis outputs:
 - `reg_test.py`: Regression testing and ranking table creation
 - `linear_optimization.py`: Linear combination optimization to maximize Spearman correlation with Elo
 - `hh_rlhf_loader.py`: HH-RLHF dataset loading and processing
+- `summarize_feedback_loader.py`: Summarize-from-feedback dataset loading and processing ⭐ **NEW**
 
 #### **Data Files** (`data/`)
 - `winner_annotations.csv`: Ground truth annotations
