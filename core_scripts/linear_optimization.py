@@ -21,8 +21,8 @@ def load_data(dataset_name):
     rankings_dir = get_rankings_dir(dataset_name)
     
     # Load Elo rankings
-    if dataset_name == 'hh_rlhf':
-        # For HH-RLHF: Elo file is in data directory
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        # For HH-RLHF and summarize_feedback: Elo file is in data directory
         elo_file = os.path.join(data_dir, "final_elo_rankings.csv")
     else:
         # For causal_relations: Elo file is in rankings directory
@@ -55,27 +55,40 @@ def prepare_data_for_optimization(elo_df, metric_dfs, dataset_name):
     """Prepare data for linear combination optimization"""
     print(f"🔧 Preparing data for {dataset_name} dataset...")
     
-    if dataset_name == 'hh_rlhf':
-        # For HH-RLHF: elo_df has 'chosen' and 'rejected' columns
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        # For HH-RLHF and summarize_feedback: use pairwise comparison structure
         print(f"📊 Elo DataFrame shape: {elo_df.shape}")
         print(f"📊 Elo DataFrame columns: {list(elo_df.columns)}")
         
-        # Check if we have the expected structure
-        if 'chosen' in elo_df.columns and 'rejected' in elo_df.columns:
+        # Check if we have the expected structure (chosen/rejected or winner/loser)
+        if ('chosen' in elo_df.columns and 'rejected' in elo_df.columns) or \
+           ('winner' in elo_df.columns and 'loser' in elo_df.columns):
             # Create combined data with both chosen and rejected
             combined_data = pd.DataFrame()
             
-            # Add Elo scores
-            combined_data['elo'] = pd.concat([
-                elo_df['chosen'].rename('elo'),
-                elo_df['rejected'].rename('elo')
-            ], ignore_index=True)
-            
-            # Add sample IDs for tracking
-            combined_data['sample_id'] = pd.concat([
-                elo_df['sample_id'].astype(str) + '_chosen',
-                elo_df['sample_id'].astype(str) + '_rejected'
-            ], ignore_index=True)
+            # Add Elo scores - handle both chosen/rejected and winner/loser
+            if 'chosen' in elo_df.columns:
+                # HH-RLHF format
+                combined_data['elo'] = pd.concat([
+                    elo_df['chosen'].rename('elo'),
+                    elo_df['rejected'].rename('elo')
+                ], ignore_index=True)
+                
+                combined_data['sample_id'] = pd.concat([
+                    elo_df['sample_id'].astype(str) + '_chosen',
+                    elo_df['sample_id'].astype(str) + '_rejected'
+                ], ignore_index=True)
+            else:
+                # summarize_feedback format
+                combined_data['elo'] = pd.concat([
+                    elo_df['winner'].rename('elo'),
+                    elo_df['loser'].rename('elo')
+                ], ignore_index=True)
+                
+                combined_data['sample_id'] = pd.concat([
+                    elo_df['sample_id'].astype(str) + '_winner',
+                    elo_df['sample_id'].astype(str) + '_loser'
+                ], ignore_index=True)
             
             # Add metric scores if available
             for metric, df in metric_dfs.items():
@@ -83,14 +96,19 @@ def prepare_data_for_optimization(elo_df, metric_dfs, dataset_name):
                     print(f"📊 {metric} DataFrame shape: {df.shape}")
                     print(f"📊 {metric} DataFrame columns: {list(df.columns)}")
                     
-                    # For HH-RLHF, metrics should have 'chosen' and 'rejected' columns
+                    # Handle both chosen/rejected and winner/loser metric structures
                     if 'chosen' in df.columns and 'rejected' in df.columns:
                         combined_data[metric] = pd.concat([
                             df['chosen'].rename(metric),
                             df['rejected'].rename(metric)
                         ], ignore_index=True)
+                    elif 'winner' in df.columns and 'loser' in df.columns:
+                        combined_data[metric] = pd.concat([
+                            df['winner'].rename(metric),
+                            df['loser'].rename(metric)
+                        ], ignore_index=True)
                     else:
-                        print(f"⚠️ {metric} doesn't have chosen/rejected structure")
+                        print(f"⚠️ {metric} doesn't have chosen/rejected or winner/loser structure")
                         # Fallback: use the first two columns if they exist
                         if len(df.columns) >= 2:
                             combined_data[metric] = pd.concat([
@@ -393,8 +411,8 @@ def create_visualization_plot(spearman_df, combined_df, rankings_dir, dataset_na
 
 def create_annotator_analysis(data, weights, metrics, rankings_dir, dataset_name):
     """Create annotator-specific analysis"""
-    if dataset_name == 'hh_rlhf':
-        # For HH-RLHF: analyze chosen vs rejected
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        # For HH-RLHF and summarize_feedback: analyze pairwise comparisons
         annotator_data = []
         
         # Calculate combined scores for each sample
@@ -429,7 +447,7 @@ def create_annotator_analysis(data, weights, metrics, rankings_dir, dataset_name
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Linear combination optimization")
-    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf"], 
+    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf", "summarize_feedback"], 
                        default="hh_rlhf", help="Dataset to process")
     args = parser.parse_args()
     
