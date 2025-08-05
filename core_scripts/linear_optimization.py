@@ -21,12 +21,21 @@ def load_data(dataset_name):
     rankings_dir = get_rankings_dir(dataset_name)
     
     # Load Elo rankings
-    elo_file = os.path.join(rankings_dir, "elo_values.csv")
+    if dataset_name == 'hh_rlhf':
+        # For HH-RLHF: Elo file is in data directory
+        elo_file = os.path.join(data_dir, "final_elo_rankings.csv")
+    else:
+        # For causal_relations: Elo file is in rankings directory
+        elo_file = os.path.join(rankings_dir, "elo_values.csv")
+    
     if not os.path.exists(elo_file):
         print(f"❌ Elo rankings file not found: {elo_file}")
         return None, None
     
     elo_df = pd.read_csv(elo_file)
+    print(f"📊 Loaded Elo file: {elo_file}")
+    print(f"📊 Elo DataFrame shape: {elo_df.shape}")
+    print(f"📊 Elo DataFrame columns: {list(elo_df.columns)}")
     
     # Load metric scores
     metrics = config['metrics']
@@ -36,37 +45,98 @@ def load_data(dataset_name):
         metric_file = os.path.join(rankings_dir, f"{metric}_values.csv")
         if os.path.exists(metric_file):
             metric_dfs[metric] = pd.read_csv(metric_file, index_col=0)
+            print(f"📊 Loaded {metric} file: {metric_file}")
         else:
             print(f"⚠️ Metric file not found: {metric_file}")
     
     return elo_df, metric_dfs
 
-def prepare_data_for_optimization(elo_df, metric_dfs):
+def prepare_data_for_optimization(elo_df, metric_dfs, dataset_name):
     """Prepare data for linear combination optimization"""
-    # Get common samples between Elo and metrics
-    elo_samples = elo_df.index.tolist()
+    print(f"🔧 Preparing data for {dataset_name} dataset...")
     
-    # For each metric, get scores for all samples
-    metric_scores = {}
-    for metric, df in metric_dfs.items():
-        if df is not None:
-            # Get scores for all models/annotators
-            common_cols = list(set(elo_df.columns) & set(df.columns))
-            if common_cols:
-                # Average scores across models for each sample
-                metric_scores[metric] = df[common_cols].mean(axis=1)
+    if dataset_name == 'hh_rlhf':
+        # For HH-RLHF: elo_df has 'chosen' and 'rejected' columns
+        print(f"📊 Elo DataFrame shape: {elo_df.shape}")
+        print(f"📊 Elo DataFrame columns: {list(elo_df.columns)}")
+        
+        # Check if we have the expected structure
+        if 'chosen' in elo_df.columns and 'rejected' in elo_df.columns:
+            # Create combined data with both chosen and rejected
+            combined_data = pd.DataFrame()
+            
+            # Add Elo scores
+            combined_data['elo'] = pd.concat([
+                elo_df['chosen'].rename('elo'),
+                elo_df['rejected'].rename('elo')
+            ], ignore_index=True)
+            
+            # Add sample IDs for tracking
+            combined_data['sample_id'] = pd.concat([
+                elo_df['sample_id'].astype(str) + '_chosen',
+                elo_df['sample_id'].astype(str) + '_rejected'
+            ], ignore_index=True)
+            
+            # Add metric scores if available
+            for metric, df in metric_dfs.items():
+                if df is not None and len(df) > 0:
+                    print(f"📊 {metric} DataFrame shape: {df.shape}")
+                    print(f"📊 {metric} DataFrame columns: {list(df.columns)}")
+                    
+                    # For HH-RLHF, metrics should have 'chosen' and 'rejected' columns
+                    if 'chosen' in df.columns and 'rejected' in df.columns:
+                        combined_data[metric] = pd.concat([
+                            df['chosen'].rename(metric),
+                            df['rejected'].rename(metric)
+                        ], ignore_index=True)
+                    else:
+                        print(f"⚠️ {metric} doesn't have chosen/rejected structure")
+                        # Fallback: use the first two columns if they exist
+                        if len(df.columns) >= 2:
+                            combined_data[metric] = pd.concat([
+                                df.iloc[:, 0].rename(metric),
+                                df.iloc[:, 1].rename(metric)
+                            ], ignore_index=True)
+                        else:
+                            print(f"❌ Cannot process {metric} data")
+            
+            # Set sample_id as index
+            combined_data.set_index('sample_id', inplace=True)
+            
+            print(f"✅ Combined data shape: {combined_data.shape}")
+            print(f"✅ Combined data columns: {list(combined_data.columns)}")
+            
+            return combined_data
+        else:
+            print(f"❌ Unexpected Elo structure for HH-RLHF: {list(elo_df.columns)}")
+            return None
     
-    # Create combined DataFrame
-    combined_data = pd.DataFrame(index=elo_samples)
-    
-    # Add Elo rankings (average across models)
-    combined_data['elo'] = elo_df.mean(axis=1)
-    
-    # Add metric scores
-    for metric, scores in metric_scores.items():
-        combined_data[metric] = scores
-    
-    return combined_data
+    else:
+        # For causal_relations: original logic
+        # Get common samples between Elo and metrics
+        elo_samples = elo_df.index.tolist()
+        
+        # For each metric, get scores for all samples
+        metric_scores = {}
+        for metric, df in metric_dfs.items():
+            if df is not None:
+                # Get scores for all models/annotators
+                common_cols = list(set(elo_df.columns) & set(df.columns))
+                if common_cols:
+                    # Average scores across models for each sample
+                    metric_scores[metric] = df[common_cols].mean(axis=1)
+        
+        # Create combined DataFrame
+        combined_data = pd.DataFrame(index=elo_samples)
+        
+        # Add Elo rankings (average across models)
+        combined_data['elo'] = elo_df.mean(axis=1)
+        
+        # Add metric scores
+        for metric, scores in metric_scores.items():
+            combined_data[metric] = scores
+        
+        return combined_data
 
 def objective_function(weights, data, metrics):
     """Objective function: negative Spearman correlation"""
@@ -376,7 +446,7 @@ def main():
     
     # Prepare data for optimization
     print("🔧 Preparing data for optimization...")
-    data = prepare_data_for_optimization(elo_df, metric_dfs)
+    data = prepare_data_for_optimization(elo_df, metric_dfs, args.dataset)
     
     if data is None or len(data) == 0:
         print("❌ No data available for optimization")
