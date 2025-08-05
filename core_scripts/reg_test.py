@@ -32,7 +32,15 @@ def main():
     rankings_dir = get_rankings_dir(args.dataset)
     
     # Load detailed scores
-    df = pd.read_csv(os.path.join(data_dir, "detailed_scores.csv"))
+    detailed_scores_file = os.path.join(data_dir, "detailed_scores.csv")
+    
+    if not os.path.exists(detailed_scores_file):
+        print(f"❌ Detailed scores file not found: {detailed_scores_file}")
+        print("   This usually means BLEURT checkpoint is missing or metrics calculation failed.")
+        print("   Please run the metrics step first: python run_pipeline.py --step metrics --dataset hh_rlhf")
+        return
+    
+    df = pd.read_csv(detailed_scores_file)
     
     # Clean up unnamed columns
     if "Unnamed: 0" in df.columns:
@@ -48,6 +56,9 @@ def main():
     print("📊 Creating ranking tables for each metric...")
     for metric in metrics:
         metric_df = df[df['Metric'] == metric]
+        if len(metric_df) == 0:
+            print(f"  ⚠️ No data found for metric: {metric}")
+            continue
         pivot = metric_df.pivot(index='Row', columns='Model', values='F1')
         pivot.to_csv(os.path.join(rankings_dir, f"{metric}_values.csv"))
         ranking_tables[metric] = pivot
@@ -55,6 +66,10 @@ def main():
     
     # Process Elo rankings
     elo_file = os.path.join(data_dir, "final_elo_rankings.csv")
+    if not os.path.exists(elo_file):
+        print(f"❌ Elo rankings file not found: {elo_file}")
+        return
+        
     elo_df = pd.read_csv(elo_file)
     elo_df = elo_df.drop(columns=["winner", "sentence_start"], errors="ignore")
     elo_df.to_csv(os.path.join(rankings_dir, "elo_values.csv"), index=False)
@@ -71,15 +86,32 @@ def main():
     spearman_scores = {}
     
     for metric in metrics:
-        df_metric = pd.read_csv(os.path.join(rankings_dir, f"{metric}_values.csv"), index_col=0)
+        metric_file = os.path.join(rankings_dir, f"{metric}_values.csv")
+        if not os.path.exists(metric_file):
+            print(f"  ⚠️ Skipping {metric} - file not found")
+            continue
+            
+        df_metric = pd.read_csv(metric_file, index_col=0)
         df_metric = df_metric.rename(columns=name_mapping)
-        df_metric = df_metric[elo.columns]  # ensure consistent column order
+        
+        # Find common columns between elo and metric data
+        common_cols = list(set(elo.columns) & set(df_metric.columns))
+        if len(common_cols) == 0:
+            print(f"  ⚠️ No common columns found for {metric}")
+            continue
+            
+        elo_common = elo[common_cols]
+        df_metric_common = df_metric[common_cols]
         
         correlations = []
         
-        for i in elo.index:
-            elo_row = elo.loc[i]
-            metric_row = df_metric.loc[i]
+        for i in elo_common.index:
+            if i not in df_metric_common.index:
+                correlations.append(0.0)
+                continue
+                
+            elo_row = elo_common.loc[i]
+            metric_row = df_metric_common.loc[i]
             
             winner = elo_row.idxmax()
             elo_filtered = elo_row.drop(winner)
