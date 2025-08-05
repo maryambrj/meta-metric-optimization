@@ -20,7 +20,7 @@ from config import *
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Regression test processing")
-    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf"], 
+    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf", "summarize_feedback"], 
                        default="causal_relations", help="Dataset to process")
     args = parser.parse_args()
     
