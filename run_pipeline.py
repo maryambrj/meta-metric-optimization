@@ -124,13 +124,13 @@ def run_metric_calculation(dataset_name='causal_relations'):
 
 def run_meta_metric_optimization(dataset_name='causal_relations'):
     """Run meta-metric optimization step"""
-    script_path = os.path.join(CORE_SCRIPTS_DIR, "linear_regression_optimization.py")
+    script_path = os.path.join(CORE_SCRIPTS_DIR, "linear_optimization.py")
     if not os.path.exists(script_path):
-        print(f"❌ Meta-metric optimization script not found: {script_path}")
+        print(f"❌ Linear optimization script not found: {script_path}")
         return False
     
-    cmd = f"cd '{CORE_SCRIPTS_DIR}' && python linear_regression_optimization.py --dataset {dataset_name}"
-    return run_command(cmd, f"Running meta-metric optimization for {dataset_name}")
+    cmd = f"cd '{CORE_SCRIPTS_DIR}' && python linear_optimization.py --dataset {dataset_name}"
+    return run_command(cmd, f"Running linear combination optimization for {dataset_name}")
 
 def generate_report():
     """Generate a summary report"""

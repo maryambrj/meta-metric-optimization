@@ -453,49 +453,67 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     # Calculate all metrics in parallel batches for better performance
     print("📈 Calculating metrics with GPU optimization...")
     
-    # Calculate BLEURT scores first (most computationally intensive)
+    # For HH-RLHF: Use human prompt as ground truth reference
+    # Both chosen and rejected responses will be compared against the human question
+    
     print("🧠 Calculating BLEURT scores (GPU-accelerated)...")
-    bleurt_chosen = metrics_calc.compute_bleurt(chosen_responses, rejected_responses)
-    bleurt_rejected = [score * 0.8 for score in bleurt_chosen]  # Simulate lower quality
+    # Extract human prompts as ground truth references
+    human_prompts = []
+    for chosen in chosen_responses:
+        # Extract the human question part (everything between "Human:" and "Assistant:")
+        if "Human:" in chosen and "Assistant:" in chosen:
+            human_part = chosen.split("Human:")[1].split("Assistant:")[0].strip()
+            human_prompts.append(human_part)
+        else:
+            # Fallback: use the full text as prompt
+            human_prompts.append(chosen)
+    
+    bleurt_chosen = metrics_calc.compute_bleurt(chosen_responses, human_prompts)
+    bleurt_rejected = metrics_calc.compute_bleurt(rejected_responses, human_prompts)
     
     # Calculate other metrics
     print("📊 Calculating BLEU scores...")
-    bleu_scores = metrics_calc.compute_bleu(chosen_responses, rejected_responses)
+    bleu_chosen = metrics_calc.compute_bleu(chosen_responses, human_prompts)
+    bleu_rejected = metrics_calc.compute_bleu(rejected_responses, human_prompts)
     
     print("🌠 Calculating METEOR scores...")
-    meteor_scores = metrics_calc.compute_meteor(chosen_responses, rejected_responses)
+    meteor_chosen = metrics_calc.compute_meteor(chosen_responses, human_prompts)
+    meteor_rejected = metrics_calc.compute_meteor(rejected_responses, human_prompts)
     
     print("🔴 Calculating ROUGE scores...")
-    rouge_scores = metrics_calc.compute_rouge(chosen_responses, rejected_responses)
+    rouge_chosen = metrics_calc.compute_rouge(chosen_responses, human_prompts)
+    rouge_rejected = metrics_calc.compute_rouge(rejected_responses, human_prompts)
     
     # Calculate verbatim scores (simple string comparison)
     print("📝 Calculating verbatim scores...")
-    verbatim_scores = [1.0 if chosen.strip() == rejected.strip() else 0.0 
-                      for chosen, rejected in zip(chosen_responses, rejected_responses)]
+    verbatim_chosen = [1.0 if chosen.strip() == prompt.strip() else 0.0 
+                      for chosen, prompt in zip(chosen_responses, human_prompts)]
+    verbatim_rejected = [1.0 if rejected.strip() == prompt.strip() else 0.0 
+                       for rejected, prompt in zip(rejected_responses, human_prompts)]
     
     # Build metrics data efficiently
     metrics_data = []
     for i in range(len(df)):
-        # Chosen response metrics
+        # Chosen response metrics (winner of pairwise comparison)
         metrics_data.append({
             'Row': i,
             'Model': 'chosen',
-            'bleu': bleu_scores[i],
-            'meteor': meteor_scores[i],
-            'rouge': rouge_scores[i],
-            'verbatim': verbatim_scores[i],
+            'bleu': bleu_chosen[i],
+            'meteor': meteor_chosen[i],
+            'rouge': rouge_chosen[i],
+            'verbatim': verbatim_chosen[i],
             'bleurt': bleurt_chosen[i],
             'text': chosen_responses[i][:100] + "..."
         })
         
-        # Rejected response metrics (simulated lower quality)
+        # Rejected response metrics (loser of pairwise comparison)
         metrics_data.append({
             'Row': i,
             'Model': 'rejected',
-            'bleu': bleu_scores[i] * 0.8,
-            'meteor': meteor_scores[i] * 0.8,
-            'rouge': rouge_scores[i] * 0.8,
-            'verbatim': verbatim_scores[i] * 0.8,
+            'bleu': bleu_rejected[i],
+            'meteor': meteor_rejected[i],
+            'rouge': rouge_rejected[i],
+            'verbatim': verbatim_rejected[i],
             'bleurt': bleurt_rejected[i],
             'text': rejected_responses[i][:100] + "..."
         })

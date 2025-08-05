@@ -237,19 +237,22 @@ cd core_scripts && python linear_regression_optimization.py --dataset hh_rlhf
 #### For HH-RLHF Dataset
 1. **Data Step** (`--step data --dataset hh_rlhf`):
    - Downloads Anthropic HH-RLHF dataset from Hugging Face
-   - Processes chosen/rejected response pairs
-   - Creates Elo rankings where chosen always beats rejected
+   - Processes chosen/rejected response pairs for pairwise comparisons
+   - Creates Elo rankings where chosen responses are winners
    - Output: `datasets/hh_rlhf/data/hh_rlhf_processed.csv`
 
 2. **Metrics Step** (`--step metrics --dataset hh_rlhf`):
-   - Compares chosen vs rejected responses using traditional metrics
-   - Creates ranking tables for pairwise comparisons
+   - Uses chosen responses as ground truth reference
+   - Calculates BLEU, BLEURT, METEOR, ROUGE, and Verbatim scores
+   - Compares both chosen and rejected responses against ground truth
+   - Creates ranking tables for metric-based evaluation
    - Output: `datasets/hh_rlhf/rankings/*_values.csv` files
 
 3. **Optimization Step** (`--step optimization --dataset hh_rlhf`):
-   - Optimizes metric weights for human preference prediction
-   - Validates on larger dataset with cross-validation
-   - Output: `datasets/hh_rlhf/rankings/combined_metric_values.csv`
+   - Performs linear combination optimization to maximize Spearman correlation with Elo
+   - Uses cross-validation to find optimal metric weights
+   - Compares metric rankings with human preference rankings (Elo)
+   - Output: `datasets/hh_rlhf/rankings/linear_optimization_results.csv`
 
 ### File Categorization
 
@@ -257,7 +260,8 @@ cd core_scripts && python linear_regression_optimization.py --dataset hh_rlhf
 - `data_processing.py`: Data preprocessing and winner extraction
 - `calc_metrics.py`: Metric calculation (BLEU, BLEURT, METEOR, ROUGE, Verbatim)
 - `reg_test.py`: Regression testing and ranking table creation
-- `linear_regression_optimization.py`: Meta-metric optimization with cross-validation
+- `linear_optimization.py`: Linear combination optimization to maximize Spearman correlation with Elo
+- `hh_rlhf_loader.py`: HH-RLHF dataset loading and processing
 
 #### **Data Files** (`data/`)
 - `winner_annotations.csv`: Ground truth annotations
