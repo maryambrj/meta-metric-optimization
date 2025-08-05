@@ -231,6 +231,7 @@ Use **Summarize-from-Feedback Dataset**:
 - **Data**: Real Reddit TL;DR posts with human-judged summaries
 - **Size**: 64,832 comparisons across multiple model policies
 - **Command**: `python run_pipeline.py --dataset summarize_feedback`
+- **Citation**: Stiennon et al. (2020) - Learning to summarize from human feedback
 
 #### 🤖 **For General Text Generation Evaluation**
 Use **HH-RLHF Dataset**:
@@ -313,6 +314,9 @@ cd core_scripts && python linear_optimization.py --dataset hh_rlhf
 # Download and process summarize-feedback dataset
 cd core_scripts && python summarize_feedback_loader.py --split train --num_samples 1000
 
+# Load validation data (unseen during training)
+cd core_scripts && python summarize_feedback_loader.py --split valid2 --num_samples 500
+
 # Calculate metrics for summarize-feedback (integrated into calc_metrics.py)
 cd core_scripts && python calc_metrics.py --dataset summarize_feedback
 
@@ -387,6 +391,14 @@ python test_summarize_feedback_pipeline.py
    - Compares metric rankings with human preference rankings (Elo)
    - Creates comprehensive visualizations and analysis
    - Output: `datasets/summarize_feedback/rankings/linear_optimization_results.csv`
+
+### Model Policies in Summarize-from-Feedback Dataset
+The dataset includes summaries from various model policies:
+- `ref`: Reference summaries
+- `sup4`: Supervised baseline
+- `ppo_xl`: RL fine-tuned policy
+- `rm4`: Reward model
+- And others for comprehensive evaluation
 
 ## Output Files Generated
 
@@ -482,3 +494,31 @@ python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size 64
 - If you encounter OOM errors, reduce batch size
 - Ensure CUDA drivers are up to date
 - Close other GPU-intensive applications during processing
+
+## Citations
+
+### Summarize-from-Feedback Dataset
+If you use the summarize-from-Feedback dataset, please cite:
+
+```bibtex
+@article{stiennon2020learning,
+  title={Learning to summarize from human feedback},
+  author={Stiennon, Nisan and Ouyang, Long and Wu, Jeffrey and Ziegler, Daniel M and Lowe, Ryan and Voss, Chelsea and Radford, Alec and Amodei, Dario and Christiano, Paul F},
+  journal={Advances in Neural Information Processing Systems},
+  volume={33},
+  pages={3008--3021},
+  year={2020}
+}
+```
+
+### Summarize-from-Feedback Dataset Troubleshooting
+
+#### Common Issues
+1. **Download Failures**: Check internet connection and Azure Blob Storage availability
+2. **Memory Issues**: Reduce `num_samples` or `batch_size` parameters
+3. **GPU Issues**: The pipeline automatically falls back to CPU if GPU is unavailable
+
+#### Performance Tips
+- Use smaller `num_samples` for testing (10-100)
+- Increase `batch_size` for faster GPU processing
+- Use `valid2` split for final evaluation (unseen during training)
