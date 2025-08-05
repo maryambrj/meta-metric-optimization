@@ -203,6 +203,9 @@ python run_pipeline.py --step optimization --dataset hh_rlhf
 
 # 5. Test the complete pipeline
 python test_hh_rlhf_pipeline.py
+
+# 6. Test comprehensive analysis (verifies all outputs match causal_relations)
+python test_comprehensive_analysis.py
 ```
 
 ### Individual Script Execution
@@ -274,7 +277,34 @@ cd core_scripts && python linear_optimization.py --dataset hh_rlhf
    - Performs linear combination optimization to maximize Spearman correlation with Elo
    - Uses cross-validation to find optimal metric weights
    - Compares metric rankings with human preference rankings (Elo)
+   - Creates comprehensive visualizations and analysis
    - Output: `datasets/hh_rlhf/rankings/linear_optimization_results.csv`
+
+## Output Files Generated
+
+Both datasets produce the same comprehensive analysis outputs:
+
+### Core Analysis Files:
+- **`combined_metric_values.csv`**: Linear combination scores with optimal weights
+- **`spearman_normalized_elo.csv`**: Spearman correlations for each metric
+- **`linear_optimization_results.csv`**: Optimal weights and cross-validation results
+- **`bootstrapped_spearman_plot.png`**: Comprehensive visualization with 4 subplots:
+  - Spearman correlation vs optimal weights
+  - Combined score vs Elo correlation scatter plot
+  - Individual metric correlations
+  - Optimal weight distribution pie chart
+
+### Individual Metric Files:
+- **`elo_values.csv`**: Elo rankings for all samples
+- **`bleu_values.csv`**: BLEU scores
+- **`bleurt_values.csv`**: BLEURT scores
+- **`meteor_values.csv`**: METEOR scores
+- **`rouge_values.csv`**: ROUGE scores
+- **`verbatim_values.csv`**: Verbatim matching scores
+
+### Additional Analysis:
+- **`combined_annotator_specific.csv`**: Annotator-specific analysis (chosen vs rejected for HH-RLHF)
+- **`spearman_per_sample.csv`**: Per-sample correlation analysis
 
 ### File Categorization
 

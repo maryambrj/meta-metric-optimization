@@ -155,8 +155,8 @@ def cross_validate_weights(data, metrics, n_splits=5):
     
     return np.mean(weights_list, axis=0), correlations
 
-def save_results(weights, metrics, correlations, dataset_name):
-    """Save optimization results"""
+def save_results(weights, metrics, correlations, dataset_name, data):
+    """Save comprehensive optimization results"""
     config = get_dataset_config(dataset_name)
     rankings_dir = get_rankings_dir(dataset_name)
     
@@ -168,10 +168,59 @@ def save_results(weights, metrics, correlations, dataset_name):
         'Std_CV_Correlation': np.std(correlations)
     })
     
-    # Save results
+    # Save basic results
     results_file = os.path.join(rankings_dir, "linear_optimization_results.csv")
     results_df.to_csv(results_file, index=False)
     print(f"💾 Saved optimization results to {results_file}")
+    
+    # Create combined metric values with optimal weights
+    print("📊 Creating combined metric values...")
+    combined_scores = np.zeros(len(data))
+    for i, metric in enumerate(metrics):
+        if metric in data.columns:
+            combined_scores += weights[i] * data[metric].values
+    
+    # Create combined metric DataFrame
+    combined_df = pd.DataFrame({
+        'sample_id': data.index,
+        'combined_score': combined_scores,
+        'elo_score': data['elo'].values
+    })
+    
+    # Add individual metric scores
+    for metric in metrics:
+        if metric in data.columns:
+            combined_df[f'{metric}_score'] = data[metric].values
+    
+    # Save combined metric values
+    combined_file = os.path.join(rankings_dir, "combined_metric_values.csv")
+    combined_df.to_csv(combined_file, index=False)
+    print(f"💾 Saved combined metric values to {combined_file}")
+    
+    # Create normalized Spearman correlations
+    print("📈 Creating normalized Spearman correlations...")
+    spearman_data = []
+    for i, metric in enumerate(metrics):
+        if metric in data.columns:
+            corr, _ = spearmanr(data[metric].values, data['elo'].values)
+            spearman_data.append({
+                'Metric': metric,
+                'Spearman_Correlation': corr if not np.isnan(corr) else 0.0,
+                'Optimal_Weight': weights[i]
+            })
+    
+    spearman_df = pd.DataFrame(spearman_data)
+    spearman_file = os.path.join(rankings_dir, "spearman_normalized_elo.csv")
+    spearman_df.to_csv(spearman_file, index=False)
+    print(f"💾 Saved Spearman correlations to {spearman_file}")
+    
+    # Create visualization plot
+    print("📊 Creating visualization plot...")
+    create_visualization_plot(spearman_df, combined_df, rankings_dir, dataset_name)
+    
+    # Create annotator-specific analysis (for HH-RLHF: chosen vs rejected)
+    print("👥 Creating annotator-specific analysis...")
+    create_annotator_analysis(data, weights, metrics, rankings_dir, dataset_name)
     
     # Print summary
     print(f"\n📋 Linear Combination Optimization Summary:")
@@ -182,6 +231,130 @@ def save_results(weights, metrics, correlations, dataset_name):
         print(f"     {metric}: {weight:.4f}")
     
     return results_df
+
+def create_visualization_plot(spearman_df, combined_df, rankings_dir, dataset_name):
+    """Create comprehensive visualization plot"""
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
+    # Set style
+    plt.style.use('default')
+    sns.set_palette("husl")
+    
+    # Create figure with subplots
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+    fig.suptitle(f'Meta-Metric Optimization Results: {dataset_name.upper()}', fontsize=16, fontweight='bold')
+    
+    # Plot 1: Spearman correlations by metric
+    metrics = spearman_df['Metric']
+    correlations = spearman_df['Spearman_Correlation']
+    weights = spearman_df['Optimal_Weight']
+    
+    x = np.arange(len(metrics))
+    width = 0.35
+    
+    bars1 = ax1.bar(x - width/2, correlations, width, label='Spearman Correlation', alpha=0.8)
+    bars2 = ax1.bar(x + width/2, weights, width, label='Optimal Weight', alpha=0.8)
+    
+    ax1.set_xlabel('Metrics')
+    ax1.set_ylabel('Correlation / Weight')
+    ax1.set_title('Spearman Correlation vs Optimal Weights')
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(metrics, rotation=45)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Add value labels on bars
+    for bar in bars1:
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+    
+    for bar in bars2:
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+    
+    # Plot 2: Combined score vs Elo correlation
+    ax2.scatter(combined_df['combined_score'], combined_df['elo_score'], alpha=0.6, s=50)
+    ax2.set_xlabel('Combined Metric Score')
+    ax2.set_ylabel('Elo Score')
+    ax2.set_title('Combined Metric Score vs Elo Score')
+    ax2.grid(True, alpha=0.3)
+    
+    # Add correlation line
+    z = np.polyfit(combined_df['combined_score'], combined_df['elo_score'], 1)
+    p = np.poly1d(z)
+    ax2.plot(combined_df['combined_score'], p(combined_df['combined_score']), "r--", alpha=0.8)
+    
+    # Plot 3: Individual metric correlations
+    metric_cols = [col for col in combined_df.columns if col.endswith('_score') and col != 'combined_score']
+    metric_names = [col.replace('_score', '') for col in metric_cols]
+    
+    correlations_individual = []
+    for col in metric_cols:
+        corr, _ = spearmanr(combined_df[col], combined_df['elo_score'])
+        correlations_individual.append(corr if not np.isnan(corr) else 0.0)
+    
+    bars = ax3.bar(metric_names, correlations_individual, alpha=0.8, color='skyblue')
+    ax3.set_xlabel('Metrics')
+    ax3.set_ylabel('Spearman Correlation')
+    ax3.set_title('Individual Metric Correlations with Elo')
+    ax3.tick_params(axis='x', rotation=45)
+    ax3.grid(True, alpha=0.3)
+    
+    # Add value labels
+    for bar in bars:
+        height = bar.get_height()
+        ax3.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{height:.3f}', ha='center', va='bottom', fontsize=9)
+    
+    # Plot 4: Weight distribution
+    ax4.pie(weights, labels=metrics, autopct='%1.1f%%', startangle=90)
+    ax4.set_title('Optimal Weight Distribution')
+    
+    plt.tight_layout()
+    
+    # Save plot
+    plot_file = os.path.join(rankings_dir, "bootstrapped_spearman_plot.png")
+    plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+    print(f"💾 Saved visualization plot to {plot_file}")
+    plt.close()
+
+def create_annotator_analysis(data, weights, metrics, rankings_dir, dataset_name):
+    """Create annotator-specific analysis"""
+    if dataset_name == 'hh_rlhf':
+        # For HH-RLHF: analyze chosen vs rejected
+        annotator_data = []
+        
+        # Calculate combined scores for each sample
+        for i in range(0, len(data), 2):  # Assuming pairs of chosen/rejected
+            if i + 1 < len(data):
+                chosen_idx = i
+                rejected_idx = i + 1
+                
+                # Calculate combined scores
+                chosen_combined = sum(weights[j] * data.iloc[chosen_idx][metrics[j]] for j in range(len(metrics)))
+                rejected_combined = sum(weights[j] * data.iloc[rejected_idx][metrics[j]] for j in range(len(metrics)))
+                
+                annotator_data.append({
+                    'sample_id': i // 2,
+                    'chosen_combined': chosen_combined,
+                    'rejected_combined': rejected_combined,
+                    'chosen_elo': data.iloc[chosen_idx]['elo'],
+                    'rejected_elo': data.iloc[rejected_idx]['elo'],
+                    'combined_correlation': spearmanr([chosen_combined, rejected_combined], 
+                                                   [data.iloc[chosen_idx]['elo'], data.iloc[rejected_idx]['elo']])[0]
+                })
+        
+        annotator_df = pd.DataFrame(annotator_data)
+        annotator_file = os.path.join(rankings_dir, "combined_annotator_specific.csv")
+        annotator_df.to_csv(annotator_file, index=False)
+        print(f"💾 Saved annotator-specific analysis to {annotator_file}")
+    
+    else:
+        # For causal_relations: use existing logic
+        pass
 
 def main():
     import argparse
@@ -223,7 +396,7 @@ def main():
     optimal_weights, correlations = cross_validate_weights(data, metrics)
     
     # Save results
-    results_df = save_results(optimal_weights, metrics, correlations, args.dataset)
+    results_df = save_results(optimal_weights, metrics, correlations, args.dataset, data)
     
     print("\n✅ Linear combination optimization complete!")
 
