@@ -1,25 +1,44 @@
-# Meta-Metric Optimization 
+# Meta-Metric Optimization and Auto-Elo Ranking
 
-This project implements a novel evaluation framework for causal relation extraction from text, combining traditional NLP metrics with an Elo ranking system to assess annotator quality and optimize metric combinations.
+A comprehensive evaluation framework for text generation quality that combines traditional NLP metrics with Elo ranking systems to assess annotator quality and optimize metric combinations.
 
 ## Project Overview
 
-The system evaluates 10 annotators (7 humans + 3 LLMs) on their ability to extract causal relations from 20 text samples, using:
-- **Traditional Metrics**: BLEU, BLEURT, METEOR, ROUGE, Verbatim matching
-- **Elo Ranking**: Competitive pairwise ranking system
-- **Meta-Metric Optimization**: Linear regression to find optimal metric weights
+This framework evaluates text generation quality across multiple datasets using:
+- **Traditional NLP Metrics**: BLEU, BLEURT, METEOR, ROUGE, Verbatim matching
+- **Elo Ranking**: Competitive pairwise ranking system with proper Elo algorithm
+- **Linear Combination Optimization**: Maximizes Spearman correlation between metrics and human preferences
+- **GPU Acceleration**: Optimized for large-scale processing with A100 GPU support
 
-## What This Project Does
+## Supported Datasets
 
-This is a **Meta-Metric Optimization** framework for evaluating text generation quality across multiple datasets. The project implements a novel evaluation framework that:
+### 1. Causal Relations Dataset
+- **Size**: 20 samples, 10 annotators (7 humans + 3 LLMs)
+- **Task**: Causal relation extraction from text
+- **Purpose**: Evaluate annotator quality and metric effectiveness
 
-1. **Supports Multiple Datasets**: 
-   - **Causal Relations**: 7 human annotators + 3 LLMs on causal relation extraction (20 samples)
-   - **HH-RLHF**: Anthropic's human preference dataset with chosen/rejected response pairs (scalable to 161k samples)
-2. **Uses Traditional NLP Metrics**: BLEU, BLEURT, METEOR, ROUGE, and Verbatim matching
-3. **Implements Elo Ranking**: Competitive pairwise ranking system to assess annotator quality
-4. **Optimizes Metric Combinations**: Uses linear regression to find optimal weights for combining metrics
-5. **Correlates with Human Judgment**: Measures how well optimized metrics predict human preferences
+### 2. HH-RLHF Dataset (Anthropic)
+- **Size**: Scalable to 161k samples
+- **Task**: Human preference prediction (chosen vs rejected responses)
+- **Purpose**: Large-scale evaluation of metric correlation with human judgments
+- **Features**: Proper Elo ranking based on pairwise comparisons
+
+## Key Features
+
+### 🚀 GPU Acceleration
+- **A100-80GB Support**: Optimized for large-scale processing
+- **Batch Processing**: Efficient memory management
+- **Performance Monitoring**: Real-time optimization feedback
+
+### 🏆 Proper Elo Algorithm
+- **Real Elo Calculations**: Not just fixed scores
+- **Pairwise Comparisons**: Simulates actual competitive ranking
+- **Dynamic Rating Updates**: Based on match outcomes
+
+### 📊 Linear Combination Optimization
+- **Spearman Correlation**: Maximizes correlation with human preferences
+- **Cross-Validation**: Robust weight optimization
+- **Multi-Dataset Support**: Works with both datasets
 
 ## Installation
 
@@ -47,7 +66,7 @@ python -c "import nltk; nltk.download('punkt'); nltk.download('wordnet'); nltk.d
 python gpu_optimization.py
 
 # Test GPU optimization features
-python test_gpu_optimization.py
+python test_gpu_optimization_fixed.py
 
 # Run with GPU acceleration
 python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size 32
@@ -72,9 +91,9 @@ python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size 32
 │   ├── data_processing.py             # Data preprocessing (causal_relations)
 │   ├── calc_metrics.py                # Metric calculation (both datasets)
 │   ├── reg_test.py                    # Regression testing (both datasets)
-│   ├── linear_regression_optimization.py # Meta-metric optimization (both datasets)
+│   ├── linear_optimization.py         # Linear combination optimization
 │   ├── hh_rlhf_loader.py             # HH-RLHF dataset loader
-│   └── README.md                      # Script documentation
+│   └── test_hh_rlhf_pipeline.py      # Pipeline testing script
 │
 ├── 📁 datasets/                       # Multi-dataset support
 │   ├── 📁 causal_relations/           # Original causal relations dataset
@@ -181,6 +200,9 @@ python run_pipeline.py --step all --dataset hh_rlhf
 python run_pipeline.py --step data --dataset hh_rlhf
 python run_pipeline.py --step metrics --dataset hh_rlhf
 python run_pipeline.py --step optimization --dataset hh_rlhf
+
+# 5. Test the complete pipeline
+python test_hh_rlhf_pipeline.py
 ```
 
 ### Individual Script Execution
@@ -196,8 +218,8 @@ cd core_scripts && python calc_metrics.py --dataset causal_relations
 # Regression Testing
 cd core_scripts && python reg_test.py --dataset causal_relations
 
-# Meta-Metric Optimization
-cd core_scripts && python linear_regression_optimization.py --dataset causal_relations
+# Linear Combination Optimization
+cd core_scripts && python linear_optimization.py --dataset causal_relations
 ```
 
 #### For HH-RLHF Dataset
@@ -211,8 +233,8 @@ cd core_scripts && python calc_metrics.py --dataset hh_rlhf
 # Regression Testing
 cd core_scripts && python reg_test.py --dataset hh_rlhf
 
-# Meta-Metric Optimization
-cd core_scripts && python linear_regression_optimization.py --dataset hh_rlhf
+# Linear Combination Optimization
+cd core_scripts && python linear_optimization.py --dataset hh_rlhf
 ```
 
 ### Pipeline Steps Explained
@@ -229,10 +251,10 @@ cd core_scripts && python linear_regression_optimization.py --dataset hh_rlhf
    - Output: `datasets/causal_relations/rankings/*_values.csv` files
 
 3. **Optimization Step** (`--step optimization --dataset causal_relations`):
-   - Performs linear regression to find optimal metric weights
-   - Runs cross-validation with bootstrapping
+   - Performs linear combination optimization to maximize Spearman correlation with Elo
+   - Uses cross-validation to find optimal metric weights
    - Creates combined metric scores and visualizations
-   - Output: `datasets/causal_relations/rankings/combined_metric_values.csv`
+   - Output: `datasets/causal_relations/rankings/linear_optimization_results.csv`
 
 #### For HH-RLHF Dataset
 1. **Data Step** (`--step data --dataset hh_rlhf`):

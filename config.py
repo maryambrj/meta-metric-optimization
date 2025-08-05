@@ -103,7 +103,7 @@ GPU_MEMORY_GROWTH = True
 BATCH_SIZE = 16  # Reduced batch size for memory efficiency
 
 # BLEURT Configuration
-BLEURT_CHECKPOINT = 'BLEURT-20'  # Updated to match official repository
+BLEURT_CHECKPOINT = os.path.join(PROJECT_ROOT, 'BLEURT-20')  # Full path to checkpoint
 BLEURT_CPU_FALLBACK = True  # Fallback to CPU if GPU fails
 
 # Annotator mapping

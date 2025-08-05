@@ -113,12 +113,19 @@ def main():
             elo_row = elo_common.loc[i]
             metric_row = df_metric_common.loc[i]
             
-            winner = elo_row.idxmax()
-            elo_filtered = elo_row.drop(winner)
-            metric_filtered = metric_row.drop(winner)
-            
-            corr, _ = spearmanr(elo_filtered, metric_filtered)
-            correlations.append(corr if not pd.isna(corr) else 0.0)
+            # For HH-RLHF: compare chosen vs rejected directly
+            if args.dataset == 'hh_rlhf':
+                # Simple correlation between Elo and metric scores
+                corr, _ = spearmanr(elo_row, metric_row)
+                correlations.append(corr if not pd.isna(corr) else 0.0)
+            else:
+                # For causal_relations: remove winner and correlate remaining
+                winner = elo_row.idxmax()
+                elo_filtered = elo_row.drop(winner)
+                metric_filtered = metric_row.drop(winner)
+                
+                corr, _ = spearmanr(elo_filtered, metric_filtered)
+                correlations.append(corr if not pd.isna(corr) else 0.0)
         
         spearman_scores[metric] = correlations
         print(f"  ✅ Computed correlations for {metric}")

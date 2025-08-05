@@ -453,43 +453,71 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     # Calculate all metrics in parallel batches for better performance
     print("📈 Calculating metrics with GPU optimization...")
     
-    # For HH-RLHF: Use human prompt as ground truth reference
-    # Both chosen and rejected responses will be compared against the human question
+    # For HH-RLHF: Extract initial human prompt and assistant responses
+    # We need to separate the prompt from the assistant responses for proper metric calculation
     
     print("🧠 Calculating BLEURT scores (GPU-accelerated)...")
-    # Extract human prompts as ground truth references
-    human_prompts = []
-    for chosen in chosen_responses:
-        # Extract the human question part (everything between "Human:" and "Assistant:")
-        if "Human:" in chosen and "Assistant:" in chosen:
-            human_part = chosen.split("Human:")[1].split("Assistant:")[0].strip()
-            human_prompts.append(human_part)
-        else:
-            # Fallback: use the full text as prompt
-            human_prompts.append(chosen)
     
-    bleurt_chosen = metrics_calc.compute_bleurt(chosen_responses, human_prompts)
-    bleurt_rejected = metrics_calc.compute_bleurt(rejected_responses, human_prompts)
+    # Extract initial human prompts and assistant responses
+    human_prompts = []
+    chosen_assistant_responses = []
+    rejected_assistant_responses = []
+    
+    for chosen, rejected in zip(chosen_responses, rejected_responses):
+        # Extract the initial human prompt (first "Human:" section)
+        if "Human:" in chosen:
+            # Get everything from the start to the first "Assistant:"
+            parts = chosen.split("Assistant:")
+            if len(parts) > 1:
+                human_part = parts[0].replace("Human:", "").strip()
+                human_prompts.append(human_part)
+                
+                # Extract assistant response (everything after first "Assistant:")
+                assistant_part = "Assistant:".join(parts[1:]).strip()
+                chosen_assistant_responses.append(assistant_part)
+            else:
+                # Fallback
+                human_prompts.append(chosen)
+                chosen_assistant_responses.append(chosen)
+        else:
+            # Fallback
+            human_prompts.append(chosen)
+            chosen_assistant_responses.append(chosen)
+        
+        # Extract assistant response from rejected (same logic)
+        if "Human:" in rejected:
+            parts = rejected.split("Assistant:")
+            if len(parts) > 1:
+                assistant_part = "Assistant:".join(parts[1:]).strip()
+                rejected_assistant_responses.append(assistant_part)
+            else:
+                rejected_assistant_responses.append(rejected)
+        else:
+            rejected_assistant_responses.append(rejected)
+    
+    # Calculate metrics using assistant responses vs human prompts
+    bleurt_chosen = metrics_calc.compute_bleurt(chosen_assistant_responses, human_prompts)
+    bleurt_rejected = metrics_calc.compute_bleurt(rejected_assistant_responses, human_prompts)
     
     # Calculate other metrics
     print("📊 Calculating BLEU scores...")
-    bleu_chosen = metrics_calc.compute_bleu(chosen_responses, human_prompts)
-    bleu_rejected = metrics_calc.compute_bleu(rejected_responses, human_prompts)
+    bleu_chosen = metrics_calc.compute_bleu(chosen_assistant_responses, human_prompts)
+    bleu_rejected = metrics_calc.compute_bleu(rejected_assistant_responses, human_prompts)
     
     print("🌠 Calculating METEOR scores...")
-    meteor_chosen = metrics_calc.compute_meteor(chosen_responses, human_prompts)
-    meteor_rejected = metrics_calc.compute_meteor(rejected_responses, human_prompts)
+    meteor_chosen = metrics_calc.compute_meteor(chosen_assistant_responses, human_prompts)
+    meteor_rejected = metrics_calc.compute_meteor(rejected_assistant_responses, human_prompts)
     
     print("🔴 Calculating ROUGE scores...")
-    rouge_chosen = metrics_calc.compute_rouge(chosen_responses, human_prompts)
-    rouge_rejected = metrics_calc.compute_rouge(rejected_responses, human_prompts)
+    rouge_chosen = metrics_calc.compute_rouge(chosen_assistant_responses, human_prompts)
+    rouge_rejected = metrics_calc.compute_rouge(rejected_assistant_responses, human_prompts)
     
     # Calculate verbatim scores (simple string comparison)
     print("📝 Calculating verbatim scores...")
     verbatim_chosen = [1.0 if chosen.strip() == prompt.strip() else 0.0 
-                      for chosen, prompt in zip(chosen_responses, human_prompts)]
+                      for chosen, prompt in zip(chosen_assistant_responses, human_prompts)]
     verbatim_rejected = [1.0 if rejected.strip() == prompt.strip() else 0.0 
-                       for rejected, prompt in zip(rejected_responses, human_prompts)]
+                       for rejected, prompt in zip(rejected_assistant_responses, human_prompts)]
     
     # Build metrics data efficiently
     metrics_data = []
@@ -503,7 +531,7 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
             'rouge': rouge_chosen[i],
             'verbatim': verbatim_chosen[i],
             'bleurt': bleurt_chosen[i],
-            'text': chosen_responses[i][:100] + "..."
+            'text': chosen_assistant_responses[i][:100] + "..."
         })
         
         # Rejected response metrics (loser of pairwise comparison)
@@ -515,7 +543,7 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
             'rouge': rouge_rejected[i],
             'verbatim': verbatim_rejected[i],
             'bleurt': bleurt_rejected[i],
-            'text': rejected_responses[i][:100] + "..."
+            'text': rejected_assistant_responses[i][:100] + "..."
         })
     
     # Create metrics DataFrame
