@@ -64,10 +64,74 @@ def test_bleurt_installation():
             
     except ImportError as e:
         print(f"❌ BLEURT import failed: {e}")
-        print("   Install with: cd bleurt && pip install -e .")
+        print("   Install with: pip install bleurt-score")
         return False
     except Exception as e:
         print(f"❌ BLEURT test failed: {e}")
+        return False
+
+def test_bleurt_gpu_performance():
+    """Test BLEURT GPU performance specifically"""
+    print("\n🧠 Testing BLEURT GPU Performance...")
+    print("=" * 50)
+    
+    # First check if GPU is available
+    try:
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        if not gpus:
+            print("❌ No GPU available for BLEURT testing")
+            return False
+        else:
+            print(f"✅ Found {len(gpus)} GPU device(s) for BLEURT testing")
+    except Exception as e:
+        print(f"❌ Error checking GPU for BLEURT: {e}")
+        return False
+    
+    try:
+        # Test BLEURT import
+        from bleurt import score
+        print("✅ BLEURT module imported successfully")
+        
+        # Check if checkpoint exists
+        checkpoint_path = 'bleurt/BLEURT-20'
+        if not os.path.exists(checkpoint_path):
+            print(f"⚠️ BLEURT checkpoint not found at {checkpoint_path}")
+            print("   BLEURT GPU test skipped - checkpoint required")
+            return False
+        
+        # Test BLEURT scorer creation with GPU
+        try:
+            scorer = score.BleurtScorer(checkpoint=checkpoint_path)
+            print("✅ BLEURT scorer created successfully")
+            
+            # Test simple scoring
+            test_candidates = ["This is a test sentence."]
+            test_references = ["This is a reference sentence."]
+            
+            print("Testing BLEURT scoring...")
+            start_time = time.time()
+            
+            scores = scorer.score(candidates=test_candidates, references=test_references)
+            
+            end_time = time.time()
+            elapsed = end_time - start_time
+            
+            print(f"✅ BLEURT GPU test completed in {elapsed:.3f}s")
+            print(f"   Score: {scores[0]:.4f}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"⚠️ BLEURT scorer test failed: {e}")
+            return False
+        
+    except ImportError as e:
+        print(f"❌ BLEURT not installed: {e}")
+        print("   Install with: pip install bleurt-score")
+        return False
+    except Exception as e:
+        print(f"❌ BLEURT GPU test failed: {e}")
         return False
 
 def test_gpu_memory_config():
@@ -182,6 +246,7 @@ def main():
         # Run all checks
         gpu_available = test_gpu_imports()
         bleurt_available = test_bleurt_installation()
+        bleurt_gpu_tested = test_bleurt_gpu_performance()
         gpu_configured = test_gpu_memory_config()
         gpu_tested = test_batch_processing()
         optimal_batch = suggest_batch_size()
@@ -191,6 +256,7 @@ def main():
         print("=" * 50)
         print(f"GPU Available: {'✅' if gpu_available else '❌'}")
         print(f"BLEURT Available: {'✅' if bleurt_available else '❌'}")
+        print(f"BLEURT GPU Ready: {'✅' if bleurt_gpu_tested else '❌'}")
         print(f"GPU Configured: {'✅' if gpu_configured else '❌'}")
         print(f"GPU Tested: {'✅' if gpu_tested else '❌'}")
         print(f"Optimal Batch Size: {optimal_batch}")
@@ -198,11 +264,14 @@ def main():
         # Print usage instructions
         print("\n🎯 Usage Instructions")
         print("=" * 50)
-        if gpu_available and bleurt_available and gpu_tested:
+        if gpu_available and bleurt_available and bleurt_gpu_tested and gpu_tested:
             print("✅ GPU is fully ready for use!")
             print(f"   Run with: python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size {optimal_batch}")
+        elif gpu_available and bleurt_available and gpu_tested:
+            print("⚠️ GPU available but BLEURT GPU test failed")
+            print(f"   Try: python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size {optimal_batch}")
         elif gpu_available and bleurt_available:
-            print("⚠️ GPU available but some tests failed")
+            print("⚠️ GPU and BLEURT available but some tests failed")
             print(f"   Try: python core_scripts/calc_metrics.py --dataset hh_rlhf --batch_size {optimal_batch}")
         elif bleurt_available:
             print("⚠️ BLEURT available but GPU issues detected")
