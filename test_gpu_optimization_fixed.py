@@ -45,7 +45,7 @@ def test_bleurt_installation():
         print("✅ BLEURT import successful")
         
         # Check if checkpoint exists
-        checkpoint_path = 'bleurt/BLEURT-20'
+        checkpoint_path = 'BLEURT-20'
         if os.path.exists(checkpoint_path):
             print(f"✅ BLEURT checkpoint found at {checkpoint_path}")
             
@@ -59,7 +59,7 @@ def test_bleurt_installation():
                 return False
         else:
             print(f"❌ BLEURT checkpoint not found at {checkpoint_path}")
-            print("   Download with: cd bleurt && wget https://storage.googleapis.com/bleurt-oss-21/BLEURT-20.zip && unzip BLEURT-20.zip")
+            print("   Download with: wget https://storage.googleapis.com/bleurt-oss-21/BLEURT-20.zip && unzip BLEURT-20.zip")
             return False
             
     except ImportError as e:
@@ -94,7 +94,7 @@ def test_bleurt_gpu_performance():
         print("✅ BLEURT module imported successfully")
         
         # Check if checkpoint exists
-        checkpoint_path = 'bleurt/BLEURT-20'
+        checkpoint_path = 'BLEURT-20'
         if not os.path.exists(checkpoint_path):
             print(f"⚠️ BLEURT checkpoint not found at {checkpoint_path}")
             print("   BLEURT GPU test skipped - checkpoint required")
