@@ -1,0 +1,242 @@
+[
+  {
+    "sample_id": 0,
+    "text": " Mum is mad at me for not flying on my own trip to meet my boyfriend.",
+    "quality_score": 0.0,
+    "policy": "sup1"
+  },
+  {
+    "sample_id": 1,
+    "text": " I have made sure my mother is comfortable with my boyfriend travelling on a trip and now my mother is mad because I booked it.",
+    "quality_score": 0.0,
+    "policy": "sup1"
+  },
+  {
+    "sample_id": 2,
+    "text": " Mum thought I was going to road trip with my boyfriend. I cancelled the flight. Mum is annoyed because she thought she would be traveling with me. I am fine with that.",
+    "quality_score": 0.0,
+    "policy": "sup1"
+  },
+  {
+    "sample_id": 3,
+    "text": " Mum is mad at me for not flying on my own trip to meet my boyfriend.",
+    "quality_score": 0.0,
+    "policy": "sup1"
+  },
+  {
+    "sample_id": 4,
+    "text": " My landlord is harassing me and my neighbours with the same falsified leaflets that she has done in the past. We are seeking to have the evidence examined by the Human Rights Board of Canada.",
+    "quality_score": 0.0,
+    "policy": "sup1"
+  },
+  {
+    "sample_id": 5,
+    "text": " I snooped, we talked about it, she wants to work it out, I'm not sure.  Is the snooping worth it?",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 6,
+    "text": " I snooped, we talked about it, she wants to work it out, I'm not sure.  Is the snooping worth it?",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 7,
+    "text": " Opened up snooping and found a google search for a guy's name and views of his facebook profile.  Girlfriend denies any feelings for him and insists that she only loves me and I mean the world to her, I'm not sure if I should admit to snooping and get to the bottom of this?",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 8,
+    "text": " Opened up snooping and found a google search for a guy's name and views of his facebook profile.  Girlfriend denies any feelings for him and insists that she only loves me and I mean the world to her, I'm not sure if I should admit to snooping and get to the bottom of this?",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 9,
+    "text": " I want to break up with my girlfriend because I'm not happy but she thinks it's her fault. Should I do it anyway?",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 10,
+    "text": " I suppose I'm just worried, I'm worried that these minor few  are setting back an important and vital message by reducing the movement itself to a laughable thing.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 11,
+    "text": " I suppose I'm just worried, I'm worried that these minor few  are setting back an important and vital message by reducing the movement itself to a laughable thing.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 12,
+    "text": " If you want equality then you must hate men. If you want equality then you must hate women. If you want equality then you must hate men and women. If you want equality then you must hate men and women. *If* you do, then you're not a real feminist.",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 13,
+    "text": " If you want equality then you must hate men. If you want equality then you must hate women. If you want equality then you must hate men and women. If you want equality then you must hate men and women. *If* you do, then you're not a real feminist.",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 14,
+    "text": " \u2013 I'm going to Canada with my dog in the next week and I need advice on what's required to get the dog into the US.",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 15,
+    "text": " friend slept with a girl, asked her on a date, but he never told her that. She's very close to him, and he's everything to her. I feel used and hurt by this, and don't know how to feel.",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 16,
+    "text": " I have a friend who has a new found attraction to me, and is pursuing to date the girl who was with him for 6 months. I feel like he's used me, and now doesn't know what to do with his new found looks and self confidence.",
+    "quality_score": 0.0,
+    "policy": "sup3_6b"
+  },
+  {
+    "sample_id": 17,
+    "text": " been sleeping with a friend, who has a close mutual friend, a week after he asked her on a date. He says he doesn't remember, and without even asking her out on a date, he wanted her to know he liked her. I feel hurt and bummed out.",
+    "quality_score": 0.0,
+    "policy": "sup2_bo8_rm1"
+  },
+  {
+    "sample_id": 18,
+    "text": " SO doesn't respect my car- but he does respect my car.",
+    "quality_score": 0.0,
+    "policy": "sup3_6b"
+  },
+  {
+    "sample_id": 19,
+    "text": " SO is underage and uses my car when driving, I want him to stop.",
+    "quality_score": 0.0,
+    "policy": "sup2"
+  },
+  {
+    "sample_id": 20,
+    "text": " I have no idea what a Christmas gift for my boyfriend is. What do I get?",
+    "quality_score": 0.0,
+    "policy": "sup3"
+  },
+  {
+    "sample_id": 21,
+    "text": " I am panicking about a Christmas present for my boyfriend and I need help.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 22,
+    "text": " I want to get my boyfriend something that he will actually like for Christmas but am at a loss... Don't want to be just a present. Need ideas.",
+    "quality_score": 0.0,
+    "policy": "sup3_ppo_rm1"
+  },
+  {
+    "sample_id": 23,
+    "text": " I have no idea what a Christmas gift for my boyfriend is. What do I get?",
+    "quality_score": 0.0,
+    "policy": "sup3"
+  },
+  {
+    "sample_id": 24,
+    "text": " I am panicking about a Christmas present for my boyfriend and I need help.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 25,
+    "text": " 16 year old wants to cut ties with family as soon as she turns 18. Not sure how to do it. Has anyone done it before, please share your story.",
+    "quality_score": 0.0,
+    "policy": "sup4_bo128_rm3"
+  },
+  {
+    "sample_id": 26,
+    "text": " I want to move out and cut contact with my \"family\" when I turn 18. How do I go about doing this?",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 27,
+    "text": " 16 year old wants to cut ties with family as soon as she turns 18. Not sure how to do it. Has anyone done it before, please share your story.",
+    "quality_score": 0.0,
+    "policy": "sup4_bo128_rm3"
+  },
+  {
+    "sample_id": 28,
+    "text": " I want to move out and cut contact with my \"family\" when I turn 18. How do I go about doing this?",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 29,
+    "text": " I want to move out and cut contact with my \"family\" when I turn 18. How do I go about doing this?",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 30,
+    "text": " car accident caused me 2-3m damage to my car both doors totally jammed and driving way faster than usual. need info on what to do with this.. thanks :)",
+    "quality_score": 0.0,
+    "policy": "sup4_ppo_rm3_kl10"
+  },
+  {
+    "sample_id": 31,
+    "text": " car accident caused me 2-3m damage to my car both doors totally jammed and driving way faster than usual. need info on what to do with this.. thanks :)",
+    "quality_score": 0.0,
+    "policy": "sup4_ppo_rm3_kl10"
+  },
+  {
+    "sample_id": 32,
+    "text": " we suspect other party involved of speeding when he hit me but I can't prove it without an investigation into the damage, how can i get such an investigation ? if at all possible.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 33,
+    "text": " car accident caused me 2-3m damage to my car both doors totally jammed and driving way faster than usual. need info on what to do with this.. thanks :)",
+    "quality_score": 0.0,
+    "policy": "sup4_ppo_rm3_kl10"
+  },
+  {
+    "sample_id": 34,
+    "text": " we suspect other party involved of speeding when he hit me but I can't prove it without an investigation into the damage, how can i get such an investigation ? if at all possible.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 35,
+    "text": " Just came out of 8 year relationship, don't know how to please myself or how to flirt/date. How do I do this?",
+    "quality_score": 0.0,
+    "policy": "sup4_t0.7"
+  },
+  {
+    "sample_id": 36,
+    "text": " Don't know how to date/flirt/flirt with someone who has never been single. Scared and confused because I have never been single before. Any advice?",
+    "quality_score": 0.0,
+    "policy": "sup4_t0.7"
+  },
+  {
+    "sample_id": 37,
+    "text": " Don't know how to date/flirt/flirt with someone who has never been single. Scared and confused because I have never been single before. Any advice?",
+    "quality_score": 0.0,
+    "policy": "sup4_t0.7"
+  },
+  {
+    "sample_id": 38,
+    "text": " Started a long-term relationship as a teenager, ended as an adult. Now feel like I don't know how to date.",
+    "quality_score": 0.0,
+    "policy": "ref"
+  },
+  {
+    "sample_id": 39,
+    "text": " Don't know how to date/flirt/flirt with someone who has never been single. Scared and confused because I have never been single before. Any advice?",
+    "quality_score": 0.0,
+    "policy": "sup4_t0.7"
+  }
+]

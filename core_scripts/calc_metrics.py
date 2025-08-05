@@ -575,6 +575,125 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     print("✅ HH-RLHF metrics calculation complete!")
     return True
 
+def process_summarize_feedback_dataset(dataset_name='summarize_feedback', batch_size=32):
+    """Process summarize-from-feedback dataset and calculate metrics with GPU optimization"""
+    perf_monitor.start(f"Summarize-feedback metrics processing")
+    print(f"🔍 Processing metrics for {dataset_name} dataset...")
+    
+    config = get_dataset_config(dataset_name)
+    data_dir = get_data_dir(dataset_name)
+    rankings_dir = get_rankings_dir(dataset_name)
+    
+    # Load processed data
+    data_file = os.path.join(data_dir, "summarize_feedback_processed.csv")
+    if not os.path.exists(data_file):
+        print(f"❌ Data file not found: {data_file}")
+        print("Please run the data loading step first: python summarize_feedback_loader.py")
+        return False
+    
+    df = pd.read_csv(data_file)
+    print(f"📊 Loaded {len(df)} samples")
+    
+    # Prepare data for metric calculation
+    # Reference: Original post text (what the summaries are trying to summarize)
+    # Candidates: Winner and loser summaries (to be evaluated against the reference)
+    winner_texts = df['winner_text'].tolist()
+    loser_texts = df['loser_text'].tolist()
+    post_texts = df['post_text'].tolist()  # This is our reference text
+    
+    # Initialize metrics calculator with optimized batch size
+    metrics_calc = Metrics(batch_size=batch_size)
+    
+    # Calculate all metrics in parallel batches for better performance
+    print("📈 Calculating metrics with GPU optimization...")
+    
+    # For summarize-feedback: Use original post text as reference, calculate metrics for both summaries
+    print("🧠 Calculating BLEURT scores (GPU-accelerated)...")
+    print("📝 Reference: Original post text")
+    print("📊 Candidates: Winner and loser summaries")
+    
+    # Calculate metrics using summaries vs post text (reference)
+    bleurt_winner = metrics_calc.compute_bleurt(winner_texts, post_texts)
+    bleurt_loser = metrics_calc.compute_bleurt(loser_texts, post_texts)
+    
+    # Calculate other metrics
+    print("📊 Calculating BLEU scores...")
+    bleu_winner = metrics_calc.compute_bleu(winner_texts, post_texts)
+    bleu_loser = metrics_calc.compute_bleu(loser_texts, post_texts)
+    
+    print("🌠 Calculating METEOR scores...")
+    meteor_winner = metrics_calc.compute_meteor(winner_texts, post_texts)
+    meteor_loser = metrics_calc.compute_meteor(loser_texts, post_texts)
+    
+    print("🔴 Calculating ROUGE scores...")
+    rouge_winner = metrics_calc.compute_rouge(winner_texts, post_texts)
+    rouge_loser = metrics_calc.compute_rouge(loser_texts, post_texts)
+    
+    # Calculate verbatim scores (simple string comparison)
+    print("📝 Calculating verbatim scores...")
+    verbatim_winner = [1.0 if winner.strip() == post.strip() else 0.0 
+                      for winner, post in zip(winner_texts, post_texts)]
+    verbatim_loser = [1.0 if loser.strip() == post.strip() else 0.0 
+                     for loser, post in zip(loser_texts, post_texts)]
+    
+    # Build metrics data efficiently
+    metrics_data = []
+    for i in range(len(df)):
+        # Winner summary metrics (winner of pairwise comparison)
+        metrics_data.append({
+            'Row': i,
+            'Model': 'winner',
+            'bleu': bleu_winner[i],
+            'meteor': meteor_winner[i],
+            'rouge': rouge_winner[i],
+            'verbatim': verbatim_winner[i],
+            'bleurt': bleurt_winner[i],
+            'text': winner_texts[i][:100] + "...",
+            'policy': df.iloc[i]['winner_policy']
+        })
+        
+        # Loser summary metrics (loser of pairwise comparison)
+        metrics_data.append({
+            'Row': i,
+            'Model': 'loser',
+            'bleu': bleu_loser[i],
+            'meteor': meteor_loser[i],
+            'rouge': rouge_loser[i],
+            'verbatim': verbatim_loser[i],
+            'bleurt': bleurt_loser[i],
+            'text': loser_texts[i][:100] + "...",
+            'policy': df.iloc[i]['loser_policy']
+        })
+    
+    # Create metrics DataFrame
+    metrics_df = pd.DataFrame(metrics_data)
+    
+    # Create rankings directory
+    os.makedirs(rankings_dir, exist_ok=True)
+    
+    # Create detailed scores file
+    print("💾 Creating detailed scores file...")
+    detailed_scores = []
+    for _, row in metrics_df.iterrows():
+        for metric in ['bleu', 'bleurt', 'meteor', 'rouge', 'verbatim']:
+            detailed_scores.append({
+                'Row': row['Row'],
+                'Model': row['Model'],
+                'Metric': metric,
+                'F1': row[metric]
+            })
+    
+    detailed_df = pd.DataFrame(detailed_scores)
+    detailed_file = os.path.join(data_dir, "detailed_scores.csv")
+    detailed_df.to_csv(detailed_file, index=False)
+    print(f"💾 Saved detailed_scores.csv")
+    
+    perf_monitor.end(f"Summarize-feedback metrics processing")
+    perf_monitor.print_summary()
+    
+    print("✅ Summarize-feedback metrics calculation complete!")
+    return True
+
 def process_causal_relations_dataset(dataset_name='causal_relations'):
     """Process causal relations dataset (original logic)"""
     print(f"🔍 Processing metrics for {dataset_name} dataset...")
@@ -611,9 +730,9 @@ def process_causal_relations_dataset(dataset_name='causal_relations'):
     return True
 
 def main():
-    """Main function to handle both datasets with GPU optimization"""
+    """Main function to handle all datasets with GPU optimization"""
     parser = argparse.ArgumentParser(description="Calculate metrics for datasets with GPU optimization")
-    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf"], 
+    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf", "summarize_feedback"], 
                        default="causal_relations", help="Dataset to process")
     parser.add_argument("--batch_size", type=int, default=32, 
                        help="Batch size for GPU processing (default: 32)")
@@ -632,6 +751,8 @@ def main():
     
     if args.dataset == 'hh_rlhf':
         success = process_hh_rlhf_dataset(args.dataset, batch_size=args.batch_size)
+    elif args.dataset == 'summarize_feedback':
+        success = process_summarize_feedback_dataset(args.dataset, batch_size=args.batch_size)
     else:
         success = process_causal_relations_dataset(args.dataset)
     

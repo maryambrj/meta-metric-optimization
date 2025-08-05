@@ -57,6 +57,23 @@ DATASETS = {
             'rejected': 'rejected'
         },
         'ordered_columns': ['chosen', 'rejected']
+    },
+    'summarize_feedback': {
+        'name': 'OpenAI Summarize-from-Feedback',
+        'description': 'Human preference dataset for summarization with pairwise comparisons',
+        'base_dir': os.path.join(DATASETS_DIR, "summarize_feedback"),
+        'data_dir': os.path.join(DATASETS_DIR, "summarize_feedback", "data"),
+        'annotations_dir': os.path.join(DATASETS_DIR, "summarize_feedback", "annotations"),
+        'processed_data_dir': os.path.join(DATASETS_DIR, "summarize_feedback", "processed_data"),
+        'rankings_dir': os.path.join(DATASETS_DIR, "summarize_feedback", "rankings"),
+        'num_samples': None,  # Will be determined from dataset
+        'num_annotators': 2,  # winner vs loser
+        'metrics': ['bleu', 'bleurt', 'meteor', 'rouge', 'verbatim'],
+        'annotator_mapping': {
+            'winner': 'winner',
+            'loser': 'loser'
+        },
+        'ordered_columns': ['winner', 'loser']
     }
 }
 
