@@ -52,109 +52,34 @@ def load_data(dataset_name):
     return elo_df, metric_dfs
 
 def prepare_data_for_optimization(elo_df, metric_dfs, dataset_name):
-    """Prepare data for linear combination optimization"""
+    """Prepare data for linear combination optimization (causal relations only)"""
     print(f"🔧 Preparing data for {dataset_name} dataset...")
     
-    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
-        # For HH-RLHF and summarize_feedback: use pairwise comparison structure
-        print(f"📊 Elo DataFrame shape: {elo_df.shape}")
-        print(f"📊 Elo DataFrame columns: {list(elo_df.columns)}")
-        
-        # Check if we have the expected structure (chosen/rejected or winner/loser)
-        if ('chosen' in elo_df.columns and 'rejected' in elo_df.columns) or \
-           ('winner' in elo_df.columns and 'loser' in elo_df.columns):
-            # Create combined data with both chosen and rejected
-            combined_data = pd.DataFrame()
-            
-            # Add Elo scores - handle both chosen/rejected and winner/loser
-            if 'chosen' in elo_df.columns:
-                # HH-RLHF format
-                combined_data['elo'] = pd.concat([
-                    elo_df['chosen'].rename('elo'),
-                    elo_df['rejected'].rename('elo')
-                ], ignore_index=True)
-                
-                combined_data['sample_id'] = pd.concat([
-                    elo_df['sample_id'].astype(str) + '_chosen',
-                    elo_df['sample_id'].astype(str) + '_rejected'
-                ], ignore_index=True)
-            else:
-                # summarize_feedback format
-                combined_data['elo'] = pd.concat([
-                    elo_df['winner'].rename('elo'),
-                    elo_df['loser'].rename('elo')
-                ], ignore_index=True)
-                
-                combined_data['sample_id'] = pd.concat([
-                    elo_df['sample_id'].astype(str) + '_winner',
-                    elo_df['sample_id'].astype(str) + '_loser'
-                ], ignore_index=True)
-            
-            # Add metric scores if available
-            for metric, df in metric_dfs.items():
-                if df is not None and len(df) > 0:
-                    print(f"📊 {metric} DataFrame shape: {df.shape}")
-                    print(f"📊 {metric} DataFrame columns: {list(df.columns)}")
-                    
-                    # Handle both chosen/rejected and winner/loser metric structures
-                    if 'chosen' in df.columns and 'rejected' in df.columns:
-                        combined_data[metric] = pd.concat([
-                            df['chosen'].rename(metric),
-                            df['rejected'].rename(metric)
-                        ], ignore_index=True)
-                    elif 'winner' in df.columns and 'loser' in df.columns:
-                        combined_data[metric] = pd.concat([
-                            df['winner'].rename(metric),
-                            df['loser'].rename(metric)
-                        ], ignore_index=True)
-                    else:
-                        print(f"⚠️ {metric} doesn't have chosen/rejected or winner/loser structure")
-                        # Fallback: use the first two columns if they exist
-                        if len(df.columns) >= 2:
-                            combined_data[metric] = pd.concat([
-                                df.iloc[:, 0].rename(metric),
-                                df.iloc[:, 1].rename(metric)
-                            ], ignore_index=True)
-                        else:
-                            print(f"❌ Cannot process {metric} data")
-            
-            # Set sample_id as index
-            combined_data.set_index('sample_id', inplace=True)
-            
-            print(f"✅ Combined data shape: {combined_data.shape}")
-            print(f"✅ Combined data columns: {list(combined_data.columns)}")
-            
-            return combined_data
-        else:
-            print(f"❌ Unexpected Elo structure for HH-RLHF: {list(elo_df.columns)}")
-            return None
+    # For causal_relations: original Elo-based correlation optimization
+    # Get common samples between Elo and metrics
+    elo_samples = elo_df.index.tolist()
     
-    else:
-        # For causal_relations: original logic
-        # Get common samples between Elo and metrics
-        elo_samples = elo_df.index.tolist()
-        
-        # For each metric, get scores for all samples
-        metric_scores = {}
-        for metric, df in metric_dfs.items():
-            if df is not None:
-                # Get scores for all models/annotators
-                common_cols = list(set(elo_df.columns) & set(df.columns))
-                if common_cols:
-                    # Average scores across models for each sample
-                    metric_scores[metric] = df[common_cols].mean(axis=1)
-        
-        # Create combined DataFrame
-        combined_data = pd.DataFrame(index=elo_samples)
-        
-        # Add Elo rankings (average across models)
-        combined_data['elo'] = elo_df.mean(axis=1)
-        
-        # Add metric scores
-        for metric, scores in metric_scores.items():
-            combined_data[metric] = scores
-        
-        return combined_data
+    # For each metric, get scores for all samples
+    metric_scores = {}
+    for metric, df in metric_dfs.items():
+        if df is not None:
+            # Get scores for all models/annotators
+            common_cols = list(set(elo_df.columns) & set(df.columns))
+            if common_cols:
+                # Average scores across models for each sample
+                metric_scores[metric] = df[common_cols].mean(axis=1)
+    
+    # Create combined DataFrame
+    combined_data = pd.DataFrame(index=elo_samples)
+    
+    # Add Elo rankings (average across models)
+    combined_data['elo'] = elo_df.mean(axis=1)
+    
+    # Add metric scores
+    for metric, scores in metric_scores.items():
+        combined_data[metric] = scores
+    
+    return combined_data
 
 def objective_function(weights, data, metrics):
     """Objective function: negative Spearman correlation"""
@@ -410,83 +335,104 @@ def create_visualization_plot(spearman_df, combined_df, rankings_dir, dataset_na
     plt.close()
 
 def create_annotator_analysis(data, weights, metrics, rankings_dir, dataset_name):
-    """Create annotator-specific analysis"""
-    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
-        # For HH-RLHF and summarize_feedback: analyze pairwise comparisons
-        annotator_data = []
-        
-        # Calculate combined scores for each sample
-        for i in range(0, len(data), 2):  # Assuming pairs of chosen/rejected
-            if i + 1 < len(data):
-                chosen_idx = i
-                rejected_idx = i + 1
-                
-                # Calculate combined scores
-                chosen_combined = sum(weights[j] * data.iloc[chosen_idx][metrics[j]] for j in range(len(metrics)))
-                rejected_combined = sum(weights[j] * data.iloc[rejected_idx][metrics[j]] for j in range(len(metrics)))
-                
-                annotator_data.append({
-                    'sample_id': i // 2,
-                    'chosen_combined': chosen_combined,
-                    'rejected_combined': rejected_combined,
-                    'chosen_elo': data.iloc[chosen_idx]['elo'],
-                    'rejected_elo': data.iloc[rejected_idx]['elo'],
-                    'combined_correlation': spearmanr([chosen_combined, rejected_combined], 
-                                                   [data.iloc[chosen_idx]['elo'], data.iloc[rejected_idx]['elo']])[0]
-                })
-        
-        annotator_df = pd.DataFrame(annotator_data)
-        annotator_file = os.path.join(rankings_dir, "combined_annotator_specific.csv")
-        annotator_df.to_csv(annotator_file, index=False)
-        print(f"💾 Saved annotator-specific analysis to {annotator_file}")
-    
-    else:
-        # For causal_relations: use existing logic
+    """Create annotator-specific analysis for causal relations"""
+    # Only used for causal_relations dataset
+    if dataset_name == 'causal_relations':
+        # Create annotator-specific combined scores (this was the original functionality)
         pass
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Linear combination optimization")
     parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf", "summarize_feedback"], 
-                       default="hh_rlhf", help="Dataset to process")
+                       default="causal_relations", help="Dataset to process")
     args = parser.parse_args()
     
-    print(f"🚀 Linear Combination Optimization for {args.dataset}")
-    print("=" * 60)
-    
-    # Load data
-    print("📊 Loading data...")
-    elo_df, metric_dfs = load_data(args.dataset)
-    
-    if elo_df is None or not metric_dfs:
-        print("❌ Failed to load data")
-        return
-    
-    # Prepare data for optimization
-    print("🔧 Preparing data for optimization...")
-    data = prepare_data_for_optimization(elo_df, metric_dfs, args.dataset)
-    
-    if data is None or len(data) == 0:
-        print("❌ No data available for optimization")
-        return
-    
-    print(f"📈 Data shape: {data.shape}")
-    print(f"📊 Available metrics: {list(data.columns[1:])}")  # Exclude 'elo'
-    
-    # Get metrics (exclude 'elo' column)
-    metrics = [col for col in data.columns if col != 'elo']
-    
-    if len(metrics) == 0:
-        print("❌ No metrics available for optimization")
-        return
-    
-    # Cross-validate weights
-    optimal_weights, correlations = cross_validate_weights(data, metrics)
-    
-    # Save results
-    results_df = save_results(optimal_weights, metrics, correlations, args.dataset, data)
-    
-    print("\n✅ Linear combination optimization complete!")
+    # Use different methods based on dataset type
+    if args.dataset in ["hh_rlhf", "summarize_feedback"]:
+        # Use pairwise logistic regression for binary preference data
+        print(f"🚀 Pairwise Logistic Regression for {args.dataset}")
+        print("=" * 60)
+        
+        from pairwise_logistic_regression import (
+            prepare_pairwise_data, cross_validate_pairwise_model, 
+            evaluate_pairwise_preference_accuracy, save_pairwise_results
+        )
+        
+        # Load data
+        print("📊 Loading data...")
+        elo_df, metric_dfs = load_data(args.dataset)
+        
+        if elo_df is None or not metric_dfs:
+            print("❌ Failed to load data")
+            return
+        
+        print("🔧 Preparing pairwise data...")
+        X_delta, y, _, metrics = prepare_pairwise_data(elo_df, metric_dfs, args.dataset)
+        
+        if len(X_delta) == 0:
+            print("❌ No pairwise data available")
+            return
+        
+        print(f"📈 Pairwise data shape: {X_delta.shape}")
+        print(f"📊 Available metrics: {metrics}")
+        
+        # Cross-validate pairwise model
+        optimal_weights, cv_scores, _ = cross_validate_pairwise_model(X_delta, y, metrics)
+        
+        # Evaluate preference accuracy
+        accuracy, predictions_df = evaluate_pairwise_preference_accuracy(
+            optimal_weights, metric_dfs, elo_df, metrics
+        )
+        
+        # Save results
+        save_pairwise_results(optimal_weights, metrics, cv_scores, predictions_df, args.dataset)
+        
+        print(f"\n✅ Pairwise logistic regression complete!")
+        print(f"   Final accuracy: {accuracy:.4f}")
+        print(f"   CV accuracy: {np.mean(cv_scores):.4f} ± {np.std(cv_scores):.4f}")
+        print(f"   Optimal weights: {dict(zip(metrics, optimal_weights))}")
+        
+    else:
+        # Use original correlation-based optimization for causal relations
+        print(f"🚀 Correlation-based Optimization for {args.dataset}")
+        print("=" * 60)
+        
+        # Load data
+        print("📊 Loading data...")
+        elo_df, metric_dfs = load_data(args.dataset)
+        
+        if elo_df is None or not metric_dfs:
+            print("❌ Failed to load data")
+            return
+        
+        # Prepare data for optimization
+        print("🔧 Preparing data for optimization...")
+        data = prepare_data_for_optimization(elo_df, metric_dfs, args.dataset)
+        
+        if data is None or len(data) == 0:
+            print("❌ No data available for optimization")
+            return
+        
+        print(f"📈 Data shape: {data.shape}")
+        print(f"📊 Available metrics: {list(data.columns[1:])}")  # Exclude 'elo'
+        
+        # Get metrics (exclude 'elo' column)
+        metrics = [col for col in data.columns if col != 'elo']
+        
+        if len(metrics) == 0:
+            print("❌ No metrics available for optimization")
+            return
+        
+        # Cross-validate weights
+        optimal_weights, correlations = cross_validate_weights(data, metrics)
+        
+        # Save results
+        save_results(optimal_weights, metrics, correlations, args.dataset, data)
+        
+        print(f"\n✅ Correlation-based optimization complete!")
+        print(f"   Final correlation: {np.mean(correlations):.4f} ± {np.std(correlations):.4f}")
+        print(f"   Optimal weights: {dict(zip(metrics, optimal_weights))}")
 
 if __name__ == "__main__":
     main() 

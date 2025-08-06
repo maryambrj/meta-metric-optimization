@@ -1,13 +1,15 @@
 # Meta-Metric Optimization and Auto-Elo Ranking
 
-A comprehensive evaluation framework for text generation quality that combines traditional NLP metrics with Elo ranking systems to assess annotator quality and optimize metric combinations through linear regression.
+A comprehensive evaluation framework for text generation quality that combines traditional NLP metrics with dual optimization methods: Elo-based correlation optimization for ranking data and pairwise logistic regression for binary preference data.
 
 ## Project Overview
 
 This framework evaluates text generation quality across multiple datasets using:
 - **Traditional NLP Metrics**: BLEU, BLEURT, METEOR, ROUGE, Verbatim matching
-- **Elo Ranking**: Competitive pairwise ranking system with proper Elo algorithm
-- **Linear Combination Optimization**: Maximizes Spearman correlation between metrics and human preferences
+- **Dual Optimization Methods**: 
+  - **Elo-based Ranking**: For datasets with multiple annotators (causal relations)
+  - **Pairwise Logistic Regression**: For binary preference data (summarization, dialogue)
+- **Automatic Method Selection**: Framework automatically chooses the appropriate method based on data type
 - **GPU Acceleration**: Optimized for large-scale processing with A100 GPU support
 
 ## Supported Datasets
@@ -15,7 +17,8 @@ This framework evaluates text generation quality across multiple datasets using:
 ### 1. Summarize-from-Feedback Dataset (OpenAI) ⭐ **RECOMMENDED**
 - **Size**: 64,832 summary comparisons from TL;DR dataset
 - **Task**: Summarization quality evaluation with human preferences
-- **Purpose**: Evaluate how well automated metrics align with human judgments in summarization
+- **Method**: Pairwise Logistic Regression (binary preference optimization)
+- **Purpose**: Optimize metric weights to predict winner/loser preferences
 - **Features**: 
   - Original post text as reference
   - Two summaries per comparison (winner vs loser based on human preference)
@@ -25,13 +28,15 @@ This framework evaluates text generation quality across multiple datasets using:
 ### 2. HH-RLHF Dataset (Anthropic)
 - **Size**: Scalable to 161k samples
 - **Task**: Human preference prediction (chosen vs rejected responses)
+- **Method**: Pairwise Logistic Regression (binary preference optimization)
 - **Purpose**: Large-scale evaluation of metric correlation with human judgments
-- **Features**: Proper Elo ranking based on pairwise comparisons
+- **Features**: Binary preference data optimized for preference prediction accuracy
 
 ### 3. Causal Relations Dataset
 - **Size**: 20 samples, 10 annotators (7 humans + 3 LLMs)
 - **Task**: Causal relation extraction from text
-- **Purpose**: Evaluate annotator quality and metric effectiveness
+- **Method**: Elo-based Correlation Optimization (traditional ranking approach)
+- **Purpose**: Evaluate annotator quality and metric effectiveness with multiple candidates per sample
 
 ## Key Features
 
@@ -45,10 +50,11 @@ This framework evaluates text generation quality across multiple datasets using:
 - **Pairwise Comparisons**: Simulates actual competitive ranking
 - **Dynamic Rating Updates**: Based on match outcomes
 
-### 📊 Linear Combination Optimization
-- **Spearman Correlation**: Maximizes correlation with human preferences
-- **Cross-Validation**: Robust weight optimization
-- **Multi-Dataset Support**: Works across all datasets
+### 📊 Dual Optimization Methods
+- **Elo-based Correlation Optimization**: Maximizes Spearman correlation for ranking data (causal relations)
+- **Pairwise Logistic Regression**: Maximizes preference prediction accuracy for binary data (summarization, dialogue)
+- **Automatic Method Selection**: Framework chooses the best approach based on data structure
+- **Cross-Validation**: Robust weight optimization for both methods
 
 ## Installation
 
@@ -95,7 +101,8 @@ rm BLEURT-20.zip
 │   ├── data_processing.py              # Data preprocessing (causal_relations)
 │   ├── hh_rlhf_loader.py              # HH-RLHF dataset loader
 │   ├── summarize_feedback_loader.py    # Summarize-feedback dataset loader
-│   ├── linear_optimization.py          # Linear combination optimization
+│   ├── linear_optimization.py          # Dual-method optimization (automatic selection)
+│   ├── pairwise_logistic_regression.py # Pairwise logistic regression for binary preference data
 │   ├── reg_test.py                     # Regression testing (all datasets)
 │   └── verify_summarize_feedback_evaluation.py  # Verification script
 │
@@ -188,24 +195,38 @@ cd core_scripts && python linear_optimization.py --dataset summarize_feedback
 
 1. **Data Step**: 
    - Downloads/processes the dataset
-   - Creates pairwise comparisons (winner vs loser)
-   - Calculates Elo rankings where preferred response always wins
-   - For summarize_feedback: Original post text becomes reference
+   - For binary preference data (summarize_feedback, hh_rlhf): Creates winner/loser pairs
+   - For ranking data (causal_relations): Creates Elo rankings with multiple annotators
+   - Automatic data structure detection
 
 2. **Metrics Step**:
    - Calculates BLEU, BLEURT, METEOR, ROUGE, Verbatim scores
-   - For summarize_feedback: Compares both summaries against original post
+   - For summarize_feedback: Compares summaries against original post text (reference)
+   - For causal_relations: Compares annotations against winner annotation (reference)
    - Creates ranking tables for each metric
 
-3. **Optimization Step**:
-   - Finds optimal linear combination weights to maximize Spearman correlation with Elo
-   - Uses cross-validation for robust optimization
-   - Creates comprehensive visualizations and analysis
+3. **Optimization Step** (Automatic Method Selection):
+   - **For Binary Preference Data**: Uses pairwise logistic regression to optimize preference prediction accuracy
+   - **For Ranking Data**: Uses correlation optimization to maximize Spearman correlation with Elo rankings
+   - Cross-validation for robust weight estimation
+   - Creates method-specific visualizations and analysis
 
 ## Output Files Generated
 
 ### Core Analysis Files:
-- **`linear_optimization_results.csv`**: Optimal weights and cross-validation results
+
+#### For Binary Preference Data (summarize_feedback, hh_rlhf):
+- **`pairwise_logistic_results.csv`**: Optimal weights and cross-validation accuracy results
+- **`pairwise_predictions.csv`**: Detailed prediction results with winner/loser scores
+- **`combined_metric_values.csv`**: Combined metric scores for winner/loser pairs
+- **`pairwise_logistic_plot.png`**: Comprehensive visualization with 4 subplots:
+  - Optimal weights from logistic regression
+  - Score difference distribution
+  - Prediction accuracy vs score difference
+  - Weight distribution pie chart
+
+#### For Ranking Data (causal_relations):
+- **`linear_optimization_results.csv`**: Optimal weights and cross-validation correlation results
 - **`combined_metric_values.csv`**: Linear combination scores with optimal weights
 - **`spearman_normalized_elo.csv`**: Spearman correlations for each metric
 - **`bootstrapped_spearman_plot.png`**: Comprehensive visualization with 4 subplots:
@@ -217,6 +238,40 @@ cd core_scripts && python linear_optimization.py --dataset summarize_feedback
 ### Individual Metric Files:
 - **`*_values.csv`**: Individual metric scores (BLEU, BLEURT, METEOR, ROUGE, Verbatim)
 - **`elo_values.csv`**: Elo rankings for all samples
+
+## Optimization Methods Explained
+
+### Method 1: Pairwise Logistic Regression (Binary Preference Data)
+**Used for**: `summarize_feedback`, `hh_rlhf`
+
+**Problem**: With only 2 candidates per sample (winner/loser), ranking correlation is either 1 or -1, making traditional correlation optimization ineffective.
+
+**Solution**: Train a logistic regression that predicts the winner from the difference of metric vectors:
+- Let `x1` and `x2` be the metric vectors (BLEU, METEOR, etc.) for the two candidates
+- Define `delta_x = x_winner - x_loser`
+- Fit logistic regression: `P(winner) = sigmoid(weights · delta_x)`
+- Optimize weights to maximize preference prediction accuracy
+
+**Benefits**: 
+- Directly optimizes for preference prediction
+- Handles binary comparison data effectively
+- Cross-validation provides robust accuracy estimates
+
+### Method 2: Elo-based Correlation Optimization (Ranking Data)
+**Used for**: `causal_relations`
+
+**Problem**: Multiple annotators (10 candidates per sample) require ranking-based evaluation.
+
+**Solution**: Traditional correlation optimization:
+- Calculate Elo rankings from pairwise comparisons
+- Compute linear combination of metrics: `combo_score = w1×metric1 + w2×metric2 + ...`
+- Rank samples by combo scores
+- Optimize weights to maximize Spearman correlation between combo rankings and Elo rankings
+
+**Benefits**:
+- Handles multiple candidates per sample effectively
+- Preserves ranking relationships
+- Cross-validation provides robust correlation estimates
 
 ## GPU Acceleration
 

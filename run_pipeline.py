@@ -131,27 +131,45 @@ def run_metric_calculation(dataset_name='causal_relations'):
     return run_command(cmd, f"Running regression test for {dataset_name}")
 
 def run_meta_metric_optimization(dataset_name='causal_relations'):
-    """Run meta-metric optimization step"""
+    """Run meta-metric optimization step with automatic method selection"""
     script_path = os.path.join(CORE_SCRIPTS_DIR, "linear_optimization.py")
     if not os.path.exists(script_path):
         print(f"❌ Linear optimization script not found: {script_path}")
         return False
     
+    # Automatic method selection is now handled inside linear_optimization.py
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        print(f"📊 Using pairwise logistic regression for {dataset_name} (binary preference data)")
+    else:
+        print(f"📊 Using correlation-based optimization for {dataset_name} (ranking data)")
+    
     cmd = f"cd '{CORE_SCRIPTS_DIR}' && python linear_optimization.py --dataset {dataset_name}"
-    return run_command(cmd, f"Running linear combination optimization for {dataset_name}")
+    return run_command(cmd, f"Running optimization for {dataset_name}")
 
-def generate_report():
+def generate_report(dataset_name='causal_relations'):
     """Generate a summary report"""
     print(f"\n{'='*60}")
     print("GENERATING SUMMARY REPORT")
     print(f"{'='*60}")
     
-    # Check if key output files exist
-    output_files = [
-        os.path.join(RANKINGS_DIR, "combined_metric_values.csv"),
-        os.path.join(RANKINGS_DIR, "spearman_normalized_elo.csv"),
-        os.path.join(RANKINGS_DIR, "bootstrapped_spearman_plot.png")
-    ]
+    rankings_dir = get_rankings_dir(dataset_name)
+    
+    # Check if key output files exist (depends on optimization method used)
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        # Pairwise logistic regression outputs
+        output_files = [
+            os.path.join(rankings_dir, "pairwise_logistic_results.csv"),
+            os.path.join(rankings_dir, "pairwise_predictions.csv"),
+            os.path.join(rankings_dir, "combined_metric_values.csv"),
+            os.path.join(rankings_dir, "pairwise_logistic_plot.png")
+        ]
+    else:
+        # Correlation-based optimization outputs
+        output_files = [
+            os.path.join(rankings_dir, "combined_metric_values.csv"),
+            os.path.join(rankings_dir, "spearman_normalized_elo.csv"),
+            os.path.join(rankings_dir, "bootstrapped_spearman_plot.png")
+        ]
     
     print("\nOutput files generated:")
     for file_path in output_files:
@@ -163,11 +181,19 @@ def generate_report():
     print(f"\n{'='*60}")
     print("PIPELINE COMPLETE!")
     print(f"{'='*60}")
-    print("Next steps:")
-    print("1. Check the rankings/ directory for metric scores")
-    print("2. Review the combined_metric_values.csv for optimized weights")
-    print("3. Examine bootstrapped_spearman_plot.png for correlation analysis")
-    print("4. Run individual notebooks for detailed analysis")
+    
+    if dataset_name in ['hh_rlhf', 'summarize_feedback']:
+        print("Next steps (Pairwise Preference Analysis):")
+        print("1. Check the rankings/ directory for pairwise preference results")
+        print("2. Review pairwise_logistic_results.csv for optimized weights")
+        print("3. Examine pairwise_predictions.csv for prediction accuracy")
+        print("4. View pairwise_logistic_plot.png for visualization")
+    else:
+        print("Next steps (Correlation-based Analysis):")
+        print("1. Check the rankings/ directory for metric scores")
+        print("2. Review the combined_metric_values.csv for optimized weights")
+        print("3. Examine bootstrapped_spearman_plot.png for correlation analysis")
+        print("4. Run individual notebooks for detailed analysis")
 
 def main():
     """Main pipeline function"""
@@ -202,7 +228,7 @@ def main():
         success &= run_meta_metric_optimization(args.dataset)
     
     if success:
-        generate_report()
+        generate_report(args.dataset)
     else:
         print("\n❌ Pipeline failed. Please check the error messages above.")
         sys.exit(1)

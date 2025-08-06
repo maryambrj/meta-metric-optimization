@@ -9,7 +9,6 @@ The dataset contains pairwise comparisons with 'chosen' and 'rejected' responses
 import os
 import sys
 import pandas as pd
-import numpy as np
 import json
 from datasets import load_dataset
 from tqdm import tqdm
@@ -117,8 +116,8 @@ def preprocess_hh_rlhf_data(df, dataset_name='hh_rlhf'):
     # Create annotation files for evaluation
     create_annotation_files(processed_df, dataset_name)
     
-    # Create Elo-style rankings (chosen always wins)
-    create_elo_rankings(processed_df, dataset_name)
+    # Create pairwise data for logistic regression (no Elo needed)
+    create_pairwise_data(processed_df, dataset_name)
     
     return processed_data
 
@@ -164,108 +163,43 @@ def create_annotation_files(df, dataset_name):
     print(f"💾 Saved chosen annotations to: {chosen_path}")
     print(f"💾 Saved rejected annotations to: {rejected_path}")
 
-def calculate_elo_rating(rating_a, rating_b, score_a, k_factor=32):
+def create_pairwise_data(df, dataset_name):
     """
-    Calculate new Elo ratings after a match
-    
-    Args:
-        rating_a: Current rating of player A
-        rating_b: Current rating of player B
-        score_a: Score for player A (1 for win, 0 for loss, 0.5 for draw)
-        k_factor: K-factor for rating updates (default 32)
-    
-    Returns:
-        tuple: (new_rating_a, new_rating_b)
+    Create pairwise data for logistic regression (no Elo needed)
     """
-    # Expected score for player A
-    expected_a = 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
-    
-    # Calculate new ratings
-    new_rating_a = rating_a + k_factor * (score_a - expected_a)
-    new_rating_b = rating_b + k_factor * ((1 - score_a) - (1 - expected_a))
-    
-    return new_rating_a, new_rating_b
-
-def create_elo_rankings(df, dataset_name):
-    """
-    Create proper Elo rankings by simulating pairwise comparisons
-    """
-    print("🏆 Creating Elo rankings with proper algorithm...")
+    print("📊 Creating pairwise preference data...")
     
     data_dir = get_data_dir(dataset_name)
     
-    # Initialize all responses with base Elo rating
-    base_rating = 1500
-    response_ratings = {}
-    
-    # Collect all unique responses and assign initial ratings
+    # Create pairwise comparison data
+    pairwise_data = []
     for _, row in df.iterrows():
-        chosen_text = row['chosen_response']
-        rejected_text = row['rejected_response']
-        
-        if chosen_text not in response_ratings:
-            response_ratings[chosen_text] = base_rating
-        if rejected_text not in response_ratings:
-            response_ratings[rejected_text] = base_rating
-    
-    print(f"📊 Initialized {len(response_ratings)} unique responses with Elo rating {base_rating}")
-    
-    # Simulate pairwise comparisons where chosen always beats rejected
-    print("🔄 Simulating pairwise comparisons...")
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing comparisons"):
-        chosen_text = row['chosen_response']
-        rejected_text = row['rejected_response']
-        
-        # Get current ratings
-        chosen_rating = response_ratings[chosen_text]
-        rejected_rating = response_ratings[rejected_text]
-        
-        # Simulate match: chosen wins (score = 1 for chosen, 0 for rejected)
-        new_chosen_rating, new_rejected_rating = calculate_elo_rating(
-            chosen_rating, rejected_rating, score_a=1.0
-        )
-        
-        # Update ratings
-        response_ratings[chosen_text] = new_chosen_rating
-        response_ratings[rejected_text] = new_rejected_rating
-    
-    # Create final Elo rankings DataFrame
-    elo_data = []
-    for _, row in df.iterrows():
-        chosen_text = row['chosen_response']
-        rejected_text = row['rejected_response']
-        
-        elo_row = {
+        pairwise_row = {
             'sample_id': row['sample_id'],
-            'chosen': response_ratings[chosen_text],
-            'rejected': response_ratings[rejected_text],
-            'winner': 'chosen',  # Chosen always wins
-            'text_preview': row['chosen_response'][:100] + "..."
+            'chosen': 1,  # Chosen always wins (binary preference)
+            'rejected': 0,   # Rejected always loses
+            'winner': 'chosen',  # Chosen is always the winner
+            'text_preview': row['chosen_response'][:100] + "..." if len(row['chosen_response']) > 100 else row['chosen_response']
         }
-        elo_data.append(elo_row)
+        pairwise_data.append(pairwise_row)
     
-    elo_df = pd.DataFrame(elo_data)
+    pairwise_df = pd.DataFrame(pairwise_data)
     
-    # Save Elo rankings
-    elo_path = os.path.join(data_dir, "final_elo_rankings.csv")
-    elo_df.to_csv(elo_path, index=False)
-    print(f"💾 Saved Elo rankings to: {elo_path}")
+    # Save pairwise data (compatible with existing pipeline)
+    pairwise_path = os.path.join(data_dir, "final_elo_rankings.csv")
+    pairwise_df.to_csv(pairwise_path, index=False)
+    print(f"💾 Saved pairwise preference data to: {pairwise_path}")
     
-    # Print statistics
-    chosen_ratings = [row['chosen'] for row in elo_data]
-    rejected_ratings = [row['rejected'] for row in elo_data]
+    print(f"📊 Pairwise Data Statistics:")
+    print(f"   Total samples: {len(pairwise_df)}")
+    print(f"   Chosen preference: 100% (by definition)")
     
-    print(f"📊 Elo Rating Statistics:")
-    print(f"   Chosen responses: Mean={np.mean(chosen_ratings):.1f}, Std={np.std(chosen_ratings):.1f}")
-    print(f"   Rejected responses: Mean={np.mean(rejected_ratings):.1f}, Std={np.std(rejected_ratings):.1f}")
-    print(f"   Rating difference: Mean={np.mean(chosen_ratings) - np.mean(rejected_ratings):.1f}")
-    
-    # Create winner annotations file
+    # Create winner annotations file (for compatibility)
     winner_data = []
     for _, row in df.iterrows():
         winner_row = {
             'sample_id': row['sample_id'],
-            'text': row['chosen_response'][:200] + "...",
+            'text': row['chosen_response'][:200] + "..." if len(row['chosen_response']) > 200 else row['chosen_response'],
             'winner_annotation': json.dumps([{
                 'chosen_text': row['chosen_response'],
                 'rejected_text': row['rejected_response'],
