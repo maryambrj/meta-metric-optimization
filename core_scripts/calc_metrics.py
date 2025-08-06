@@ -500,20 +500,20 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     bleurt_rejected = metrics_calc.compute_bleurt(rejected_assistant_responses, human_prompts)
     
     # Calculate other metrics
-    print("📊 Calculating BLEU scores...")
+    print("Calculating BLEU scores...")
     bleu_chosen = metrics_calc.compute_bleu(chosen_assistant_responses, human_prompts)
     bleu_rejected = metrics_calc.compute_bleu(rejected_assistant_responses, human_prompts)
     
-    print("🌠 Calculating METEOR scores...")
+    print("Calculating METEOR scores...")
     meteor_chosen = metrics_calc.compute_meteor(chosen_assistant_responses, human_prompts)
     meteor_rejected = metrics_calc.compute_meteor(rejected_assistant_responses, human_prompts)
     
-    print("🔴 Calculating ROUGE scores...")
+    print("Calculating ROUGE scores...")
     rouge_chosen = metrics_calc.compute_rouge(chosen_assistant_responses, human_prompts)
     rouge_rejected = metrics_calc.compute_rouge(rejected_assistant_responses, human_prompts)
     
     # Calculate verbatim scores (simple string comparison)
-    print("📝 Calculating verbatim scores...")
+    print("Calculating verbatim scores...")
     verbatim_chosen = [1.0 if chosen.strip() == prompt.strip() else 0.0 
                       for chosen, prompt in zip(chosen_assistant_responses, human_prompts)]
     verbatim_rejected = [1.0 if rejected.strip() == prompt.strip() else 0.0 
@@ -553,7 +553,7 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     os.makedirs(rankings_dir, exist_ok=True)
     
     # Create detailed scores file
-    print("💾 Creating detailed scores file...")
+    print("Creating detailed scores file...")
     detailed_scores = []
     for _, row in metrics_df.iterrows():
         for metric in ['bleu', 'bleurt', 'meteor', 'rouge', 'verbatim']:
@@ -567,7 +567,7 @@ def process_hh_rlhf_dataset(dataset_name='hh_rlhf', batch_size=32):
     detailed_df = pd.DataFrame(detailed_scores)
     detailed_file = os.path.join(data_dir, "detailed_scores.csv")
     detailed_df.to_csv(detailed_file, index=False)
-    print(f"💾 Saved detailed_scores.csv")
+    print(f"Saved detailed_scores.csv")
     
     perf_monitor.end(f"HH-RLHF metrics processing")
     perf_monitor.print_summary()
@@ -617,20 +617,20 @@ def process_summarize_feedback_dataset(dataset_name='summarize_feedback', batch_
     bleurt_loser = metrics_calc.compute_bleurt(loser_texts, post_texts)
     
     # Calculate other metrics
-    print("📊 Calculating BLEU scores...")
+    print("Calculating BLEU scores...")
     bleu_winner = metrics_calc.compute_bleu(winner_texts, post_texts)
     bleu_loser = metrics_calc.compute_bleu(loser_texts, post_texts)
     
-    print("🌠 Calculating METEOR scores...")
+    print("Calculating METEOR scores...")
     meteor_winner = metrics_calc.compute_meteor(winner_texts, post_texts)
     meteor_loser = metrics_calc.compute_meteor(loser_texts, post_texts)
     
-    print("🔴 Calculating ROUGE scores...")
+    print("Calculating ROUGE scores...")
     rouge_winner = metrics_calc.compute_rouge(winner_texts, post_texts)
     rouge_loser = metrics_calc.compute_rouge(loser_texts, post_texts)
     
     # Calculate verbatim scores (simple string comparison)
-    print("📝 Calculating verbatim scores...")
+    print("Calculating verbatim scores...")
     verbatim_winner = [1.0 if winner.strip() == post.strip() else 0.0 
                       for winner, post in zip(winner_texts, post_texts)]
     verbatim_loser = [1.0 if loser.strip() == post.strip() else 0.0 
