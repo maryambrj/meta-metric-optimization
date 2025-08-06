@@ -155,5 +155,4 @@ transformers_cache/
 *.meta
 *.index
 *.data-00000-of-00001 bleurt/
-bleurt/
 BLEURT-20/
