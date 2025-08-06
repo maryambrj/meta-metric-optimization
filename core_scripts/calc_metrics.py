@@ -688,6 +688,23 @@ def process_summarize_feedback_dataset(dataset_name='summarize_feedback', batch_
     detailed_df.to_csv(detailed_file, index=False)
     print(f"💾 Saved detailed_scores.csv")
     
+    # Create individual metric ranking files for reg_test.py
+    print("📊 Creating metric ranking tables...")
+    for metric in config['metrics']:
+        metric_df = detailed_df[detailed_df['Metric'] == metric]
+        if len(metric_df) == 0:
+            print(f"  ⚠️ No data found for metric: {metric}")
+            continue
+        
+        # Pivot to create the format expected by reg_test.py
+        # Rows are sample indices, columns are winner/loser
+        pivot = metric_df.pivot(index='Row', columns='Model', values='F1')
+        
+        # Save to rankings directory
+        metric_file = os.path.join(rankings_dir, f"{metric}_values.csv")
+        pivot.to_csv(metric_file)
+        print(f"  ✅ Created {metric}_values.csv")
+    
     perf_monitor.end(f"Summarize-feedback metrics processing")
     perf_monitor.print_summary()
     

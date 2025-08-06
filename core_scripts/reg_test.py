@@ -71,8 +71,26 @@ def main():
         return
         
     elo_df = pd.read_csv(elo_file)
-    elo_df = elo_df.drop(columns=["winner", "sentence_start"], errors="ignore")
-    elo_df.to_csv(os.path.join(rankings_dir, "elo_values.csv"), index=False)
+    
+    if args.dataset == 'summarize_feedback':
+        # For summarize_feedback: convert to winner/loser format expected by correlation analysis
+        elo_processed = pd.DataFrame()
+        elo_processed['sample_id'] = elo_df['sample_id']
+        elo_processed['winner'] = elo_df['winner']
+        elo_processed['loser'] = elo_df['loser']
+        elo_processed.to_csv(os.path.join(rankings_dir, "elo_values.csv"), index=False)
+    elif args.dataset == 'hh_rlhf':
+        # For hh_rlhf: similar structure
+        elo_processed = pd.DataFrame()
+        elo_processed['sample_id'] = elo_df['sample_id'] if 'sample_id' in elo_df.columns else range(len(elo_df))
+        elo_processed['chosen'] = elo_df['chosen'] if 'chosen' in elo_df.columns else elo_df['winner']
+        elo_processed['rejected'] = elo_df['rejected'] if 'rejected' in elo_df.columns else elo_df['loser']
+        elo_processed.to_csv(os.path.join(rankings_dir, "elo_values.csv"), index=False)
+    else:
+        # For causal_relations: original logic
+        elo_df = elo_df.drop(columns=["winner", "sentence_start"], errors="ignore")
+        elo_df.to_csv(os.path.join(rankings_dir, "elo_values.csv"), index=False)
+    
     print("  ✅ Created elo_values.csv")
     
     # Use dataset-specific name mapping
@@ -113,8 +131,8 @@ def main():
             elo_row = elo_common.loc[i]
             metric_row = df_metric_common.loc[i]
             
-            # For HH-RLHF: compare chosen vs rejected directly
-            if args.dataset == 'hh_rlhf':
+            # For HH-RLHF and summarize_feedback: compare pairwise directly
+            if args.dataset in ['hh_rlhf', 'summarize_feedback']:
                 # Simple correlation between Elo and metric scores
                 corr, _ = spearmanr(elo_row, metric_row)
                 correlations.append(corr if not pd.isna(corr) else 0.0)
