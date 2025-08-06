@@ -154,4 +154,6 @@ transformers_cache/
 # TensorFlow
 *.meta
 *.index
-*.data-00000-of-00001 
+*.data-00000-of-00001 bleurt/
+bleurt/
+BLEURT-20/
