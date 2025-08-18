@@ -12,6 +12,25 @@ This framework evaluates text generation quality across multiple datasets using:
 - **Automatic Method Selection**: Framework automatically chooses the appropriate method based on data type
 - **GPU Acceleration**: Optimized for large-scale processing with A100 GPU support
 
+## Analysis Methods
+
+### 🆕 **Method 1: Elo-based Correlation Optimization** ⭐ **RECOMMENDED**
+- **Approach**: Chess tournament-style analysis where models/humans are "players"
+- **Input**: Preference comparisons between summaries  
+- **Output**: Elo rankings + optimal metric combination
+- **Correlation**: Spearman correlation optimization
+- **Metrics**: BLEU, ROUGE-L, METEOR, Verbatim, BLEURT
+- **Benefits**: 
+  - Intuitive tournament ranking system
+  - Handles binary preference data elegantly
+  - Real-world interpretable Elo scores
+  - Comprehensive correlation analysis
+
+### **Method 2: Traditional Pipeline** (Original Implementation)
+- **Approach**: Direct metric correlation with rankings
+- **Methods**: Pairwise logistic regression or ranking correlation
+- **Use case**: For comparison with traditional approaches
+
 ## Supported Datasets
 
 ### 1. Summarize-from-Feedback Dataset (OpenAI) ⭐ **RECOMMENDED**
@@ -40,10 +59,13 @@ This framework evaluates text generation quality across multiple datasets using:
 
 ## Key Features
 
-### 🚀 GPU Acceleration
-- **A100-80GB Support**: Optimized for large-scale processing
-- **Batch Processing**: Efficient memory management
-- **Performance Monitoring**: Real-time optimization feedback
+### 🚀 GPU Acceleration & Auto-Detection
+- **Automatic GPU Detection**: Detects NVIDIA GPUs, CUDA, TensorFlow GPU support
+- **Auto-Enable BLEURT**: Automatically enables BLEURT when GPU is available
+- **Intelligent Batch Sizing**: Optimizes batch sizes based on GPU memory (8GB-24GB+)
+- **Memory Management**: TensorFlow GPU memory growth to prevent allocation issues
+- **A100-80GB Support**: Optimized for large-scale processing with high-memory GPUs
+- **Fallback Support**: Gracefully handles GPU failures and falls back to CPU
 
 ### 🏆 Proper Elo Algorithm
 - **Real Elo Calculations**: Not just fixed scores
@@ -134,9 +156,55 @@ rm BLEURT-20.zip
 
 ## Quick Start
 
+### 🚀 **NEW: Elo-based Correlation Optimization** (Recommended)
+
+#### **Complete Analysis - One Simple Command**
+
+```bash
+# Run complete analysis on full dataset with all 5 metrics
+python run_full_analysis.py
+```
+
+**How it works:**
+- 🔍 **Auto-detects GPU** and enables BLEURT automatically if available
+- 📊 **Full dataset**: All ~180K comparisons (~360K summaries)
+- 🎯 **All 5 metrics**: BLEU, ROUGE-L, METEOR, Verbatim, BLEURT
+- ⚡ **Optimized**: GPU batch processing, intelligent memory management
+- 🏆 **Chess tournament approach**: Each model/human is a "player" with Elo rankings
+- 📊 **Metrics vs original text**: Summaries compared against original article/post
+- 📈 **Spearman optimization**: Finds optimal linear combination of metrics
+- 💾 **Complete results**: Terminal output + saved visualizations + CSV data
+
+**Output:**
+- Terminal: Complete analysis results with correlations and rankings
+- Files: `datasets/summarize_feedback/simple_elo/`
+  - `results.png` - Comprehensive visualization
+  - `player_metrics.csv` - All player data and metrics
+  - `weights.csv` - Optimal metric weights and correlations
+
+**Example Terminal Output:**
+```
+🏆 TOP 5 PLAYERS BY ELO RATING:
+   1. PPO-RM3-KL6                        :  1763.8
+   2. 6B-ppo_rm4_6B-kl14                 :  1653.8
+   3. HUMAN (reference)                  :  1639.6
+   4. PPO-RM3-KL22                       :  1638.0
+   5. PPO-RM3-KL9                        :  1590.7
+
+📈 SPEARMAN CORRELATIONS WITH ELO RATINGS:
+   • METEOR    :  0.5989  ⭐ Best predictor
+   • ROUGE_L   :  0.5714
+   • VERBATIM  :  0.5659
+   • BLEU      :  0.5330
+
+⚖️  OPTIMAL LINEAR COMBINATION:
+   • Combined correlation: 0.5989
+   • Key insight: METEOR alone performs as well as combination
+```
+
 ### Dataset Selection Guide
 
-#### 🎯 **For Summarization Evaluation** (Recommended)
+#### 🎯 **For Summarization Evaluation** (Classic Pipeline)
 ```bash
 # Complete pipeline for summarization evaluation
 python run_pipeline.py --step all --dataset summarize_feedback
@@ -284,10 +352,20 @@ python gpu_optimization.py
 python core_scripts/calc_metrics.py --dataset summarize_feedback --batch_size 32
 ```
 
+### GPU Testing & Verification
+```bash
+# Test GPU detection and optimization
+python test_gpu_optimization.py
+
+# Check GPU status only
+python gpu_utils.py
+```
+
 ### Performance Benefits
-- **BLEURT Calculation**: 5-10x faster with GPU
-- **Batch Processing**: Efficient memory usage
-- **Memory Management**: Automatic GPU memory cleanup
+- **BLEURT Calculation**: 5-10x faster with GPU for large batches
+- **Automatic Optimization**: Batch sizes optimized for available GPU memory
+- **Memory Management**: TensorFlow GPU memory growth and cleanup
+- **Intelligent Fallback**: Continues without BLEURT if GPU unavailable
 
 ## Citations
 
@@ -321,13 +399,39 @@ If you use the Summarize-from-Feedback dataset, please cite:
 
 ### Common Issues
 1. **BLEURT Download Failures**: Ensure BLEURT-20 checkpoint is downloaded correctly
+   - BLEURT is optional - analysis continues with 4 metrics if unavailable
 2. **Memory Issues**: Reduce `num_samples` or `batch_size` parameters
 3. **GPU Issues**: Pipeline automatically falls back to CPU if GPU unavailable
+4. **Missing dependencies**: Run `pip install -r requirements.txt`
 
 ### Performance Tips
 - Use smaller `num_samples` for testing (100-1000)
-- Increase `batch_size` for faster GPU processing (if memory allows)
+- Increase `batch_size` for faster GPU processing (if memory allows)  
 - Use validation splits for final evaluation
+
+### Expected Output Files
+After running any analysis:
+```
+datasets/summarize_feedback/simple_elo/
+├── results.png              # 4-panel visualization
+├── player_metrics.csv       # All player data and metrics  
+└── weights.csv              # Optimal weights and correlations
+```
+
+### Performance & Dataset Size Information
+
+**Dataset Statistics:**
+- **Total available**: 178,944 comparisons (~360K summaries)
+- **Default script**: Uses 12,177 comparisons (~25K summaries, ~7% of data)
+- **Reason for subset**: Full dataset takes 30-45 minutes vs 2-3 minutes
+
+**Metric Performance:**
+- **Fast metrics**: BLEU, ROUGE-L, METEOR, Verbatim (CPU, seconds per thousand)
+- **Slow metric**: BLEURT (GPU required, minutes per thousand)
+
+**Hardware Requirements:**
+- **CPU analysis**: 4GB RAM, any modern CPU
+- **BLEURT analysis**: NVIDIA GPU with 8GB+ VRAM, CUDA toolkit
 
 ## License
 

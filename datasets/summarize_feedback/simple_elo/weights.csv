@@ -1,0 +1,6 @@
+metric,weight,individual_correlation
+bleu,0.2,0.532967032967033
+rouge_l,0.2,0.5714285714285714
+meteor,0.2,0.5989010989010989
+verbatim,0.2,0.5659340659340659
+bleurt,0.2,
