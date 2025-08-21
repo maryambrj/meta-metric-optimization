@@ -62,6 +62,14 @@ class MetricCalculator:
     
     def _download_nltk_data(self):
         """Download required NLTK data"""
+        # Download punkt_tab (newer NLTK versions)
+        try:
+            nltk.data.find('tokenizers/punkt_tab')
+        except LookupError:
+            print("📥 Downloading NLTK punkt_tab tokenizer...")
+            nltk.download('punkt_tab', quiet=True)
+        
+        # Download punkt (fallback for older versions)
         try:
             nltk.data.find('tokenizers/punkt')
         except LookupError:
