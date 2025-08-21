@@ -29,7 +29,7 @@ sys.path.insert(0, project_root)
 class MetricOptimizer:
     """Optimize metric weights for maximum correlation with Elo rankings"""
     
-    def __init__(self, output_file=None, resume=True):
+    def __init__(self, output_file=None, resume=True, regularization='none', reg_strength=0.01):
         self.metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
         self.metric_data = None
         self.elo_rankings = None
@@ -39,6 +39,8 @@ class MetricOptimizer:
         self.summary_file = None
         self.iteration_count = 0
         self.resume = resume
+        self.regularization = regularization  # 'none', 'l1', 'l2', 'entropy'
+        self.reg_strength = reg_strength
         
         # Initialize output files if provided
         if self.output_file:
@@ -231,12 +233,9 @@ class MetricOptimizer:
         return ranking_df
     
     def objective_function(self, weights):
-        """Objective function: negative Spearman correlation"""
+        """Objective function: negative Spearman correlation with optional regularization"""
         try:
-            # Ensure weights sum to 1
-            weights = weights / np.sum(weights)
-            
-            # Calculate metric-based ranking
+            # Calculate metric-based ranking (weights are already normalized by constraint)
             metric_ranking = self.calculate_metric_ranking(weights)
             
             # Merge with Elo rankings
@@ -254,16 +253,39 @@ class MetricOptimizer:
             # Calculate Spearman correlation
             correlation, _ = spearmanr(merged['metric_rank'], merged['rank'])
             
+            # Add regularization term
+            reg_term = self._calculate_regularization(weights)
+            
             # Save results incrementally if correlation is valid and output file is set
             if not np.isnan(correlation) and self.output_file:
                 self._write_iteration_results(weights, correlation, merged)
             
-            # Return negative correlation (minimize negative = maximize positive)
-            return -correlation if not np.isnan(correlation) else 1.0
+            # Return negative correlation plus regularization (minimize negative = maximize positive)
+            objective = -correlation + reg_term if not np.isnan(correlation) else 1.0
+            return objective
             
         except Exception as e:
             print(f"Error in objective function: {e}")
             return 1.0
+    
+    def _calculate_regularization(self, weights):
+        """Calculate regularization term based on selected method"""
+        if self.regularization == 'none':
+            return 0.0
+        elif self.regularization == 'l1':
+            # L1 regularization encourages sparsity (some weights = 0)
+            return self.reg_strength * np.sum(np.abs(weights))
+        elif self.regularization == 'l2':
+            # L2 regularization encourages smaller weights
+            return self.reg_strength * np.sum(weights ** 2)
+        elif self.regularization == 'entropy':
+            # Entropy regularization encourages diversity (opposite of equal weights)
+            # Higher entropy = more diverse weights
+            entropy = -np.sum(weights * np.log(weights + 1e-10))
+            # We want to maximize entropy (diversity), so subtract it
+            return -self.reg_strength * entropy
+        else:
+            return 0.0
     
     def optimize_weights(self):
         """Find optimal weights using scipy optimization"""
@@ -465,7 +487,7 @@ class MetricOptimizer:
             print(f"\n🔍 Analysis with min {min_samples} samples per participant:")
             
             # Get filtered scores
-            participant_scores, qualified = self.calculate_participant_scores_filtered(weights, min_samples)
+            participant_scores, _ = self.calculate_participant_scores_filtered(weights, min_samples)
             
             if len(participant_scores) < 2:
                 print(f"   ⚠️ Not enough qualified participants ({len(participant_scores)})")
@@ -520,6 +542,7 @@ class MetricOptimizer:
                 f.write(f"\n" + "=" * 40 + "\n")
                 f.write(f"FINAL RESULTS\n")
                 f.write(f"=" * 40 + "\n")
+                f.write(f"Regularization: {self.regularization} (strength: {self.reg_strength})\n")
                 f.write(f"Total optimization iterations: {self.iteration_count}\n")
                 f.write(f"Final Spearman Correlation: {correlation:.6f}\n\n")
                 f.write("Final Optimal Weights:\n")
@@ -564,14 +587,22 @@ def main():
     parser.add_argument("--output", default="metric_optimization_results.csv", help="Output file")
     parser.add_argument("--cross-validate", action="store_true", help="Use cross-validation")
     parser.add_argument("--no-resume", action="store_true", help="Start fresh instead of resuming from existing files")
+    parser.add_argument("--regularization", choices=['none', 'l1', 'l2', 'entropy'], default='none', help="Regularization method")
+    parser.add_argument("--reg-strength", type=float, default=0.01, help="Regularization strength")
     
     args = parser.parse_args()
     
     print("🚀 Metric Weight Optimization")
     print("=" * 40)
+    print(f"📊 Regularization: {args.regularization} (strength: {args.reg_strength})")
     
     # Initialize optimizer with output file for incremental writing
-    optimizer = MetricOptimizer(output_file=args.output, resume=not args.no_resume)
+    optimizer = MetricOptimizer(
+        output_file=args.output, 
+        resume=not args.no_resume,
+        regularization=args.regularization,
+        reg_strength=args.reg_strength
+    )
     
     # Load data
     if not optimizer.load_data(args.metric_file, args.elo_file):

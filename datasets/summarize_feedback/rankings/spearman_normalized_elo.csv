@@ -1,6 +1,0 @@
-Metric,Spearman_Correlation,Optimal_Weight
-bleu,0.1526487155419394,0.2
-bleurt,0.08475870488740693,0.2
-meteor,0.16717602605933546,0.2
-rouge,0.13941758497110654,0.2
-verbatim,0.0,0.2
