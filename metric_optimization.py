@@ -29,11 +29,119 @@ sys.path.insert(0, project_root)
 class MetricOptimizer:
     """Optimize metric weights for maximum correlation with Elo rankings"""
     
-    def __init__(self):
+    def __init__(self, output_file=None, resume=True):
         self.metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
         self.metric_data = None
         self.elo_rankings = None
         self.participant_scores = None
+        self.output_file = output_file
+        self.weights_file = None
+        self.summary_file = None
+        self.iteration_count = 0
+        self.resume = resume
+        
+        # Initialize output files if provided
+        if self.output_file:
+            self.weights_file = self.output_file.replace('.csv', '_weights.csv')
+            self.summary_file = self.output_file.replace('.csv', '_summary.txt')
+            self._initialize_output_files()
+    
+    def _initialize_output_files(self):
+        """Initialize output files with headers or check for existing files"""
+        try:
+            # Check for existing files
+            results_exists = os.path.exists(self.output_file)
+            weights_exists = os.path.exists(self.weights_file)
+            summary_exists = os.path.exists(self.summary_file)
+            
+            if self.resume and (results_exists or weights_exists or summary_exists):
+                print(f"📄 Found existing optimization files:")
+                if results_exists:
+                    with open(self.output_file, 'r') as f:
+                        lines = len(f.readlines())
+                    print(f"   Results: {self.output_file} ({lines-1} iterations)")
+                if weights_exists:
+                    with open(self.weights_file, 'r') as f:
+                        lines = len(f.readlines())
+                    print(f"   Weights: {self.weights_file} ({lines-1} iterations)")
+                if summary_exists:
+                    print(f"   Summary: {self.summary_file}")
+                
+                # Get last iteration number
+                self.iteration_count = self._get_last_iteration()
+                if self.iteration_count > 0:
+                    print(f"🔄 Resume mode: Will continue from iteration {self.iteration_count + 1}")
+                    return
+            elif not self.resume and (results_exists or weights_exists or summary_exists):
+                print(f"🗑️ Starting fresh: Removing existing files...")
+                if results_exists:
+                    os.remove(self.output_file)
+                if weights_exists:
+                    os.remove(self.weights_file)
+                if summary_exists:
+                    os.remove(self.summary_file)
+            
+            # Initialize new files
+            with open(self.output_file, 'w') as f:
+                f.write("iteration,participant,metric_rank,metric_score,elo_rank,elo_rating,correlation\n")
+            
+            with open(self.weights_file, 'w') as f:
+                header = "iteration," + ",".join(self.metrics) + ",correlation\n"
+                f.write(header)
+            
+            with open(self.summary_file, 'w') as f:
+                f.write("Metric Optimization Results - Incremental\n")
+                f.write("=" * 40 + "\n\n")
+            
+            print(f"📁 Initialized new output files:")
+            print(f"   Results: {self.output_file}")
+            print(f"   Weights: {self.weights_file}")
+            print(f"   Summary: {self.summary_file}")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not initialize output files: {e}")
+    
+    def _get_last_iteration(self):
+        """Get the last iteration number from existing files"""
+        try:
+            if os.path.exists(self.weights_file):
+                with open(self.weights_file, 'r') as f:
+                    lines = f.readlines()
+                
+                if len(lines) > 1:  # Skip header
+                    last_line = lines[-1].strip()
+                    if last_line:
+                        return int(last_line.split(',')[0])
+        except Exception as e:
+            print(f"⚠️ Warning: Could not read last iteration: {e}")
+        
+        return 0
+    
+    def _write_iteration_results(self, weights, correlation, results_df):
+        """Write results for current iteration"""
+        try:
+            self.iteration_count += 1
+            
+            # Write weights
+            with open(self.weights_file, 'a') as f:
+                weight_str = ",".join(f"{w:.6f}" for w in weights)
+                f.write(f"{self.iteration_count},{weight_str},{correlation:.6f}\n")
+            
+            # Write detailed results
+            with open(self.output_file, 'a') as f:
+                for _, row in results_df.iterrows():
+                    f.write(f"{self.iteration_count},{row['participant']},{row['metric_rank']},{row['metric_score']:.6f},{row['rank']},{row['final_rating']:.2f},{correlation:.6f}\n")
+            
+            # Update summary
+            with open(self.summary_file, 'a') as f:
+                f.write(f"\nIteration {self.iteration_count}:\n")
+                f.write(f"  Correlation: {correlation:.6f}\n")
+                f.write(f"  Weights: {dict(zip(self.metrics, weights))}\n")
+            
+            print(f"💾 Saved iteration {self.iteration_count} results (correlation: {correlation:.4f})")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not write iteration results: {e}")
     
     def load_data(self, metric_file, elo_file):
         """Load metric scores and Elo rankings"""
@@ -133,8 +241,8 @@ class MetricOptimizer:
             
             # Merge with Elo rankings
             merged = pd.merge(
-                metric_ranking[['participant', 'metric_rank']], 
-                self.elo_rankings[['player', 'rank']], 
+                metric_ranking[['participant', 'metric_rank', 'metric_score']], 
+                self.elo_rankings[['player', 'rank', 'final_rating']], 
                 left_on='participant', 
                 right_on='player', 
                 how='inner'
@@ -145,6 +253,10 @@ class MetricOptimizer:
             
             # Calculate Spearman correlation
             correlation, _ = spearmanr(merged['metric_rank'], merged['rank'])
+            
+            # Save results incrementally if correlation is valid and output file is set
+            if not np.isnan(correlation) and self.output_file:
+                self._write_iteration_results(weights, correlation, merged)
             
             # Return negative correlation (minimize negative = maximize positive)
             return -correlation if not np.isnan(correlation) else 1.0
@@ -192,12 +304,22 @@ class MetricOptimizer:
         """Cross-validate the optimization with different data splits"""
         print(f"🔄 Cross-validating with {n_folds} folds...")
         
+        # Add fold info to summary
+        if self.summary_file:
+            with open(self.summary_file, 'a') as f:
+                f.write(f"\n=== Cross-Validation ({n_folds} folds) ===\n")
+        
         # For simplicity, just run optimization multiple times with random subsets
         correlations = []
         weight_sets = []
         
         for fold in range(n_folds):
             print(f"\n   Fold {fold + 1}/{n_folds}")
+            
+            # Add fold marker to summary
+            if self.summary_file:
+                with open(self.summary_file, 'a') as f:
+                    f.write(f"\nFold {fold + 1}:\n")
             
             # Use a random subset for this fold
             subset_size = int(0.8 * len(self.metric_data))
@@ -221,6 +343,14 @@ class MetricOptimizer:
         print(f"\n📊 Cross-validation results:")
         print(f"   Mean correlation: {avg_correlation:.4f} ± {std_correlation:.4f}")
         print(f"   Individual correlations: {[f'{c:.4f}' for c in correlations]}")
+        
+        # Save cross-validation summary
+        if self.summary_file:
+            with open(self.summary_file, 'a') as f:
+                f.write(f"\nCross-validation Summary:\n")
+                f.write(f"  Mean correlation: {avg_correlation:.4f} ± {std_correlation:.4f}\n")
+                f.write(f"  Individual correlations: {correlations}\n")
+                f.write(f"  Average weights: {dict(zip(self.metrics, avg_weights))}\n")
         
         return avg_weights, avg_correlation, std_correlation
     
@@ -379,32 +509,51 @@ class MetricOptimizer:
         return merged
     
     def save_results(self, weights, correlation, results_df, output_file):
-        """Save optimization results"""
-        # Save weights
-        weights_df = pd.DataFrame({
-            'metric': self.metrics,
-            'weight': weights
-        })
-        
-        weights_file = output_file.replace('.csv', '_weights.csv')
-        weights_df.to_csv(weights_file, index=False)
-        print(f"\n💾 Saved optimal weights to: {weights_file}")
-        
-        # Save ranking comparison
-        results_df.to_csv(output_file, index=False)
-        print(f"💾 Saved ranking comparison to: {output_file}")
-        
-        # Save summary
-        summary_file = output_file.replace('.csv', '_summary.txt')
-        with open(summary_file, 'w') as f:
-            f.write("Metric Optimization Results\n")
-            f.write("=" * 30 + "\n\n")
-            f.write(f"Spearman Correlation: {correlation:.4f}\n\n")
-            f.write("Optimal Weights:\n")
-            for i, metric in enumerate(self.metrics):
-                f.write(f"  {metric}: {weights[i]:.4f}\n")
-        
-        print(f"💾 Saved summary to: {summary_file}")
+        """Save optimization results (final summary if incremental writing was used)"""
+        if self.output_file:
+            # If incremental writing was used, just add final summary
+            print(f"\n💾 Results already saved incrementally during optimization")
+            print(f"   Total iterations saved: {self.iteration_count}")
+            
+            # Add final summary to existing summary file
+            with open(self.summary_file, 'a') as f:
+                f.write(f"\n" + "=" * 40 + "\n")
+                f.write(f"FINAL RESULTS\n")
+                f.write(f"=" * 40 + "\n")
+                f.write(f"Total optimization iterations: {self.iteration_count}\n")
+                f.write(f"Final Spearman Correlation: {correlation:.6f}\n\n")
+                f.write("Final Optimal Weights:\n")
+                for i, metric in enumerate(self.metrics):
+                    f.write(f"  {metric}: {weights[i]:.6f}\n")
+                f.write(f"\nNumber of participants in final ranking: {len(results_df)}\n")
+            
+            print(f"💾 Updated final summary in: {self.summary_file}")
+        else:
+            # Fallback to original behavior if no incremental writing
+            weights_df = pd.DataFrame({
+                'metric': self.metrics,
+                'weight': weights
+            })
+            
+            weights_file = output_file.replace('.csv', '_weights.csv')
+            weights_df.to_csv(weights_file, index=False)
+            print(f"\n💾 Saved optimal weights to: {weights_file}")
+            
+            # Save ranking comparison
+            results_df.to_csv(output_file, index=False)
+            print(f"💾 Saved ranking comparison to: {output_file}")
+            
+            # Save summary
+            summary_file = output_file.replace('.csv', '_summary.txt')
+            with open(summary_file, 'w') as f:
+                f.write("Metric Optimization Results\n")
+                f.write("=" * 30 + "\n\n")
+                f.write(f"Spearman Correlation: {correlation:.4f}\n\n")
+                f.write("Optimal Weights:\n")
+                for i, metric in enumerate(self.metrics):
+                    f.write(f"  {metric}: {weights[i]:.4f}\n")
+            
+            print(f"💾 Saved summary to: {summary_file}")
 
 
 def main():
@@ -414,14 +563,15 @@ def main():
     parser.add_argument("--elo-file", default="datasets/summarize_feedback/elo_tournament_results/elo_tournament_rankings.csv", help="Elo rankings CSV file")
     parser.add_argument("--output", default="metric_optimization_results.csv", help="Output file")
     parser.add_argument("--cross-validate", action="store_true", help="Use cross-validation")
+    parser.add_argument("--no-resume", action="store_true", help="Start fresh instead of resuming from existing files")
     
     args = parser.parse_args()
     
     print("🚀 Metric Weight Optimization")
     print("=" * 40)
     
-    # Initialize optimizer
-    optimizer = MetricOptimizer()
+    # Initialize optimizer with output file for incremental writing
+    optimizer = MetricOptimizer(output_file=args.output, resume=not args.no_resume)
     
     # Load data
     if not optimizer.load_data(args.metric_file, args.elo_file):

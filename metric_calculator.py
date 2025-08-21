@@ -30,7 +30,6 @@ import nltk
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from nltk.translate.meteor_score import meteor_score
 from rouge_score import rouge_scorer
-import tensorflow as tf
 
 # Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +38,7 @@ sys.path.insert(0, project_root)
 class MetricCalculator:
     """Calculate multiple NLP metrics for summarization quality"""
     
-    def __init__(self, use_gpu=True, batch_size=32, bleurt_checkpoint=None):
+    def __init__(self, use_gpu=True, batch_size=32, bleurt_checkpoint=None, output_file=None):
         """
         Initialize metric calculator
         
@@ -47,11 +46,14 @@ class MetricCalculator:
             use_gpu (bool): Whether to use GPU for BLEURT
             batch_size (int): Batch size for GPU processing
             bleurt_checkpoint (str): Path to BLEURT checkpoint
+            output_file (str): Path for incremental output writing
         """
         self.use_gpu = use_gpu
         self.batch_size = batch_size
         self.bleurt_scorer = None
         self.bleurt_checkpoint_path = bleurt_checkpoint
+        self.output_file = output_file
+        self.samples_processed = 0
         
         # Download required NLTK data
         self._download_nltk_data()
@@ -61,6 +63,88 @@ class MetricCalculator:
         
         # Initialize BLEURT if available
         self._initialize_bleurt()
+        
+        # Initialize output file if provided
+        if self.output_file:
+            self._initialize_output_file()
+    
+    def _initialize_output_file(self):
+        """Initialize output file with CSV header or check for existing file"""
+        try:
+            if os.path.exists(self.output_file):
+                # Check if file has content
+                with open(self.output_file, 'r') as f:
+                    lines = f.readlines()
+                
+                if len(lines) > 1:  # Has header + at least one data row
+                    print(f"📄 Found existing output file: {self.output_file}")
+                    print(f"📊 Already contains {len(lines)-1} processed samples")
+                    return
+                elif len(lines) == 1:  # Has only header
+                    print(f"📄 Found partial output file with header: {self.output_file}")
+                    return
+            
+            # Create new file with header
+            with open(self.output_file, 'w') as f:
+                header = "sample_id,post_id,batch,reference_length,summary1_length,summary2_length,summary1_policy,summary2_policy"
+                metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
+                for metric in metrics:
+                    header += f",summary1_{metric},summary2_{metric}"
+                f.write(header + "\n")
+            print(f"📁 Initialized new incremental output file: {self.output_file}")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not initialize output file: {e}")
+    
+    def _get_processed_sample_ids(self):
+        """Get set of sample IDs that have already been processed"""
+        processed_ids = set()
+        try:
+            if os.path.exists(self.output_file):
+                with open(self.output_file, 'r') as f:
+                    lines = f.readlines()
+                
+                if len(lines) > 1:  # Skip header
+                    for line in lines[1:]:
+                        if line.strip():
+                            sample_id = line.split(',')[0]
+                            try:
+                                processed_ids.add(int(sample_id))
+                            except ValueError:
+                                continue
+        except Exception as e:
+            print(f"⚠️ Warning: Could not read existing output file: {e}")
+        
+        return processed_ids
+    
+    def _write_sample_result(self, result_row):
+        """Write a single sample result to output file"""
+        try:
+            with open(self.output_file, 'a') as f:
+                # Write values in the same order as header
+                values = [
+                    str(result_row['sample_id']),
+                    str(result_row['post_id']),
+                    str(result_row['batch']),
+                    str(result_row['reference_length']),
+                    str(result_row['summary1_length']),
+                    str(result_row['summary2_length']),
+                    str(result_row['summary1_policy']),
+                    str(result_row['summary2_policy'])
+                ]
+                
+                # Add metric scores
+                metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
+                for metric in metrics:
+                    values.append(f"{result_row[f'summary1_{metric}']:.6f}")
+                    values.append(f"{result_row[f'summary2_{metric}']:.6f}")
+                
+                f.write(",".join(values) + "\n")
+            
+            self.samples_processed += 1
+            if self.samples_processed % 100 == 0:
+                print(f"💾 Saved {self.samples_processed} samples to {self.output_file}")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not write sample result: {e}")
     
     def _download_nltk_data(self):
         """Download required NLTK data"""
@@ -135,8 +219,9 @@ class MetricCalculator:
                         print(f"     - {path}")
                     return
             
-            # Configure GPU
+            # Configure GPU (import tensorflow only when needed)
             if self.use_gpu:
+                import tensorflow as tf
                 gpus = tf.config.experimental.list_physical_devices('GPU')
                 if gpus:
                     print(f"🚀 Found {len(gpus)} GPU(s), enabling GPU acceleration for BLEURT")
@@ -284,17 +369,98 @@ class MetricCalculator:
     
     def process_dataset(self, data, save_path=None):
         """
-        Process entire dataset
+        Process entire dataset with incremental writing
         
         Args:
             data (list): List of data samples with 'reference', 'summary1', 'summary2'
-            save_path (str): Path to save results
+            save_path (str): Path to save results (ignored if output_file is set for incremental writing)
             
         Returns:
-            pd.DataFrame: Results with metric scores
+            pd.DataFrame: Results with metric scores (only if not using incremental writing)
         """
         print(f"🚀 Processing {len(data):,} samples...")
         
+        if self.output_file:
+            return self._process_dataset_incremental(data)
+        else:
+            return self._process_dataset_batch(data, save_path)
+    
+    def _process_dataset_incremental(self, data):
+        """Process dataset with incremental writing (sample by sample)"""
+        print("💾 Using incremental writing mode...")
+        
+        # Get already processed sample IDs
+        processed_ids = self._get_processed_sample_ids()
+        if processed_ids:
+            print(f"🔄 Resume mode: Found {len(processed_ids)} already processed samples")
+        
+        # Count samples to process
+        samples_to_process = []
+        for sample in data:
+            sample_id = sample.get('sample_id', len(samples_to_process))
+            if sample_id not in processed_ids:
+                samples_to_process.append(sample)
+        
+        if not samples_to_process:
+            print(f"✅ All {len(data)} samples already processed!")
+            return None
+        
+        print(f"📊 Processing {len(samples_to_process):,} remaining samples (skipping {len(processed_ids)} already done)")
+        
+        # Process remaining samples one by one
+        for i, sample in enumerate(samples_to_process):
+            sample_id = sample.get('sample_id', i)
+            
+            # Calculate BLEURT for this sample
+            if self.bleurt_scorer is not None:
+                references = [sample['reference'], sample['reference']]
+                candidates = [sample['summary1'], sample['summary2']]
+                bleurt_scores = self.calculate_bleurt_batch(references, candidates)
+                bleurt_sum1 = bleurt_scores[0] if len(bleurt_scores) > 0 else 0.0
+                bleurt_sum2 = bleurt_scores[1] if len(bleurt_scores) > 1 else 0.0
+            else:
+                bleurt_sum1 = bleurt_sum2 = 0.0
+            
+            # Calculate other metrics
+            results = self.process_sample(
+                sample['reference'], 
+                sample['summary1'], 
+                sample['summary2']
+            )
+            
+            # Add BLEURT scores
+            results['summary1']['bleurt'] = bleurt_sum1
+            results['summary2']['bleurt'] = bleurt_sum2
+            
+            # Create result record
+            result_row = {
+                'sample_id': sample_id,
+                'post_id': sample.get('post_id', ''),
+                'batch': sample.get('batch', ''),
+                'reference_length': len(sample['reference'].split()),
+                'summary1_length': len(sample['summary1'].split()),
+                'summary2_length': len(sample['summary2'].split()),
+                'summary1_policy': sample.get('summary1_policy', ''),
+                'summary2_policy': sample.get('summary2_policy', ''),
+            }
+            
+            # Add metric scores
+            for metric in ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']:
+                result_row[f'summary1_{metric}'] = results['summary1'].get(metric, 0.0)
+                result_row[f'summary2_{metric}'] = results['summary2'].get(metric, 0.0)
+            
+            # Write result immediately
+            self._write_sample_result(result_row)
+            
+            if (i + 1) % 1000 == 0:
+                print(f"   Processed {i+1:,} new samples...")
+        
+        total_processed = len(processed_ids) + len(samples_to_process)
+        print(f"✅ Incremental processing complete! {total_processed:,} total samples in {self.output_file}")
+        return None  # Don't return DataFrame to save memory
+    
+    def _process_dataset_batch(self, data, save_path):
+        """Process dataset in batch mode (original behavior)"""
         all_results = []
         
         # Prepare data for batch BLEURT processing
@@ -488,7 +654,8 @@ def main():
     calculator = MetricCalculator(
         use_gpu=use_gpu, 
         batch_size=args.batch_size, 
-        bleurt_checkpoint=args.bleurt_checkpoint
+        bleurt_checkpoint=args.bleurt_checkpoint,
+        output_file=args.output  # Enable incremental writing
     )
     
     # Process dataset
@@ -497,13 +664,27 @@ def main():
     end_time = time.time()
     
     # Print summary
-    print_summary_statistics(results_df)
+    if results_df is not None:
+        print_summary_statistics(results_df)
+    else:
+        # Print summary for incremental mode
+        print(f"\n📊 METRIC CALCULATION SUMMARY (INCREMENTAL MODE)")
+        print("=" * 60)
+        print(f"\n📈 Dataset Statistics:")
+        print(f"   Total samples processed: {len(data):,}")
+        print(f"   Total summaries analyzed: {len(data) * 2:,}")
+        print(f"   Samples saved incrementally: {calculator.samples_processed:,}")
+        print(f"\n🎯 Incremental Processing Complete:")
+        print(f"   Results saved to: {args.output}")
     
     print(f"\n⏱️ Processing Time: {end_time - start_time:.2f} seconds")
     print(f"📊 Average time per sample: {(end_time - start_time) / len(data):.4f} seconds")
     
     print(f"\n✅ Metric calculation complete!")
-    print(f"📁 Results saved to: {args.output}")
+    if results_df is not None:
+        print(f"📁 Results saved to: {args.output}")
+    else:
+        print(f"📁 Results saved incrementally to: {args.output}")
 
 
 if __name__ == "__main__":

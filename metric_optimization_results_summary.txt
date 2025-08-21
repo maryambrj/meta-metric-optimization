@@ -1,0 +1,52 @@
+Metric Optimization Results - Incremental
+========================================
+
+
+Iteration 1:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.14285714285714288, 'meteor': 0.14285714285714288, 'rouge1': 0.14285714285714288, 'rouge2': 0.14285714285714288, 'rougeL': 0.14285714285714288, 'verbatim': 0.14285714285714288, 'bleurt': 0.14285714285714288}
+
+Iteration 2:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.14285715562956658, 'meteor': 0.1428571407284056, 'rouge1': 0.1428571407284056, 'rouge2': 0.1428571407284056, 'rougeL': 0.1428571407284056, 'verbatim': 0.1428571407284056, 'bleurt': 0.1428571407284056}
+
+Iteration 3:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.14285715562956658, 'rouge1': 0.1428571407284056, 'rouge2': 0.1428571407284056, 'rougeL': 0.1428571407284056, 'verbatim': 0.1428571407284056, 'bleurt': 0.1428571407284056}
+
+Iteration 4:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.1428571407284056, 'rouge1': 0.14285715562956658, 'rouge2': 0.1428571407284056, 'rougeL': 0.1428571407284056, 'verbatim': 0.1428571407284056, 'bleurt': 0.1428571407284056}
+
+Iteration 5:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.1428571407284056, 'rouge1': 0.1428571407284056, 'rouge2': 0.14285715562956658, 'rougeL': 0.1428571407284056, 'verbatim': 0.1428571407284056, 'bleurt': 0.1428571407284056}
+
+Iteration 6:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.1428571407284056, 'rouge1': 0.1428571407284056, 'rouge2': 0.1428571407284056, 'rougeL': 0.14285715562956658, 'verbatim': 0.1428571407284056, 'bleurt': 0.1428571407284056}
+
+Iteration 7:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.1428571407284056, 'rouge1': 0.1428571407284056, 'rouge2': 0.1428571407284056, 'rougeL': 0.1428571407284056, 'verbatim': 0.14285715562956658, 'bleurt': 0.1428571407284056}
+
+Iteration 8:
+  Correlation: 0.400000
+  Weights: {'bleu': 0.1428571407284056, 'meteor': 0.1428571407284056, 'rouge1': 0.1428571407284056, 'rouge2': 0.1428571407284056, 'rougeL': 0.1428571407284056, 'verbatim': 0.1428571407284056, 'bleurt': 0.14285715562956658}
+
+========================================
+FINAL RESULTS
+========================================
+Total optimization iterations: 8
+Final Spearman Correlation: 0.400000
+
+Final Optimal Weights:
+  bleu: 0.142857
+  meteor: 0.142857
+  rouge1: 0.142857
+  rouge2: 0.142857
+  rougeL: 0.142857
+  verbatim: 0.142857
+  bleurt: 0.142857
+
+Number of participants in final ranking: 4
