@@ -236,7 +236,11 @@ class MetricCalculator:
         
         try:
             scores = self.bleurt_scorer.score(references=references, candidates=candidates)
-            return scores.tolist()
+            # Handle both numpy arrays and lists
+            if hasattr(scores, 'tolist'):
+                return scores.tolist()
+            else:
+                return list(scores)
         except Exception as e:
             print(f"⚠️ BLEURT batch calculation failed: {e}")
             return [0.0] * len(candidates)
