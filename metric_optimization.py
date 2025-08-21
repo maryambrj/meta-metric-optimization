@@ -29,7 +29,7 @@ sys.path.insert(0, project_root)
 class MetricOptimizer:
     """Optimize metric weights for maximum correlation with Elo rankings"""
     
-    def __init__(self, output_file=None, resume=True, regularization='none', reg_strength=0.01):
+    def __init__(self, output_file=None, resume=True, regularization='none', reg_strength=0.01, random_init=False, min_samples=50):
         self.metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
         self.metric_data = None
         self.elo_rankings = None
@@ -41,6 +41,8 @@ class MetricOptimizer:
         self.resume = resume
         self.regularization = regularization  # 'none', 'l1', 'l2', 'entropy'
         self.reg_strength = reg_strength
+        self.random_init = random_init
+        self.min_samples = min_samples
         
         # Initialize output files if provided
         if self.output_file:
@@ -130,9 +132,14 @@ class MetricOptimizer:
                 f.write(f"{self.iteration_count},{weight_str},{correlation:.6f}\n")
             
             # Write detailed results
+            # results_df here is `merged` with these columns available:
+            # ['participant','metric_rank','metric_score','player','rank','final_rating']
             with open(self.output_file, 'a') as f:
                 for _, row in results_df.iterrows():
-                    f.write(f"{self.iteration_count},{row['participant']},{row['metric_rank']},{row['metric_score']:.6f},{row['rank']},{row['final_rating']:.2f},{correlation:.6f}\n")
+                    f.write(
+                        f"{self.iteration_count},{row['participant']},{row['metric_rank']},"
+                        f"{row['metric_score']:.6f},{row['rank']},{row['final_rating']:.2f},{correlation:.6f}\n"
+                    )
             
             # Update summary
             with open(self.summary_file, 'a') as f:
@@ -157,6 +164,9 @@ class MetricOptimizer:
         self.metric_data = pd.read_csv(metric_file)
         print(f"✅ Loaded {len(self.metric_data):,} metric samples")
         
+        # Normalize metrics to stabilize optimization
+        self._normalize_metrics()
+        
         # Load Elo rankings
         if not os.path.exists(elo_file):
             print(f"❌ Elo file not found: {elo_file}")
@@ -164,6 +174,9 @@ class MetricOptimizer:
         
         self.elo_rankings = pd.read_csv(elo_file)
         print(f"✅ Loaded {len(self.elo_rankings)} Elo rankings")
+        
+        # Clean participant/player names for robust joining
+        self._clean_names()
         
         return True
     
@@ -235,10 +248,25 @@ class MetricOptimizer:
     def objective_function(self, weights):
         """Objective function: negative Spearman correlation with optional regularization"""
         try:
-            # Calculate metric-based ranking (weights are already normalized by constraint)
-            metric_ranking = self.calculate_metric_ranking(weights)
+            # Use filtered scores to reduce noise from low-sample participants
+            participant_scores, qualified_participants = self.calculate_participant_scores_filtered(weights, self.min_samples)
             
-            # Merge with Elo rankings
+            if len(participant_scores) < 2:
+                return 1.0  # Return worst correlation if insufficient data
+            
+            # Create ranking DataFrame from filtered scores
+            ranking_data = []
+            for participant, score in participant_scores.items():
+                ranking_data.append({
+                    'participant': participant,
+                    'metric_score': score
+                })
+            
+            metric_ranking = pd.DataFrame(ranking_data)
+            metric_ranking = metric_ranking.sort_values('metric_score', ascending=False)
+            metric_ranking['metric_rank'] = range(1, len(metric_ranking) + 1)
+            
+            # Merge with Elo rankings using cleaned names
             merged = pd.merge(
                 metric_ranking[['participant', 'metric_rank', 'metric_score']], 
                 self.elo_rankings[['player', 'rank', 'final_rating']], 
@@ -279,20 +307,84 @@ class MetricOptimizer:
             # L2 regularization encourages smaller weights
             return self.reg_strength * np.sum(weights ** 2)
         elif self.regularization == 'entropy':
-            # Entropy regularization encourages diversity (opposite of equal weights)
-            # Higher entropy = more diverse weights
+            # Entropy regularization - PENALIZE high entropy (uniform weights)
+            # Higher entropy = more uniform weights, which we want to discourage
             entropy = -np.sum(weights * np.log(weights + 1e-10))
-            # We want to maximize entropy (diversity), so subtract it
-            return -self.reg_strength * entropy
+            # Penalize high entropy to discourage uniform weights
+            return self.reg_strength * entropy
         else:
             return 0.0
+    
+    def _normalize_metrics(self):
+        """Normalize each metric to have mean=0, std=1 for stable optimization"""
+        print("🔧 Normalizing metrics for stable optimization...")
+        
+        for metric in self.metrics:
+            for summary in ["summary1_", "summary2_"]:
+                col = summary + metric
+                if col in self.metric_data.columns:
+                    mu = self.metric_data[col].mean()
+                    sd = self.metric_data[col].std(ddof=0) or 1.0
+                    self.metric_data[col] = (self.metric_data[col] - mu) / sd
+        
+        print(f"✅ Normalized {len(self.metrics)} metrics for both summaries")
+    
+    def _clean_names(self):
+        """Clean participant and player names for robust joining"""
+        print("🧹 Cleaning names for robust participant-player matching...")
+        
+        # Clean metric data participant names
+        for col in ['summary1_policy', 'summary2_policy']:
+            if col in self.metric_data.columns:
+                self.metric_data[col] = self.metric_data[col].astype(str).str.strip().str.lower()
+        
+        # Clean elo rankings player names
+        if 'player' in self.elo_rankings.columns:
+            self.elo_rankings['player'] = self.elo_rankings['player'].astype(str).str.strip().str.lower()
+        
+        print(f"✅ Cleaned names for robust matching")
+    
+    def sanity_check_objective(self):
+        """Test objective function with random weights to verify it's not stuck"""
+        print("🔍 Sanity check: Testing objective with random weights...")
+        
+        correlations = []
+        for i, w in enumerate(np.random.dirichlet(np.ones(len(self.metrics)), size=5)):
+            try:
+                obj_value = self.objective_function(w)
+                correlation = -obj_value  # Remove negative sign to get actual correlation
+                correlations.append(correlation)
+                
+                weight_str = ", ".join(f"{metric}:{weight:.3f}" for metric, weight in zip(self.metrics, w))
+                print(f"   Test {i+1}: correlation={correlation:.4f} | weights=({weight_str})")
+            except Exception as e:
+                print(f"   Test {i+1}: ERROR - {e}")
+        
+        if correlations:
+            min_corr, max_corr = min(correlations), max(correlations)
+            range_corr = max_corr - min_corr
+            print(f"📊 Correlation range: {min_corr:.4f} to {max_corr:.4f} (range: {range_corr:.4f})")
+            
+            if range_corr < 0.001:
+                print("⚠️  WARNING: Very small correlation range - objective might be stuck!")
+            else:
+                print("✅ Good variation in correlations - objective function working properly")
+        else:
+            print("❌ All tests failed - check objective function implementation")
     
     def optimize_weights(self):
         """Find optimal weights using scipy optimization"""
         print("🔧 Optimizing metric weights...")
         
-        # Initial weights (equal)
-        initial_weights = np.ones(len(self.metrics)) / len(self.metrics)
+        # Initial weights
+        if self.random_init:
+            # Random initialization to break symmetry
+            initial_weights = np.random.dirichlet(np.ones(len(self.metrics)))
+            print(f"🎲 Using random initialization: {dict(zip(self.metrics, initial_weights))}")
+        else:
+            # Equal initialization
+            initial_weights = np.ones(len(self.metrics)) / len(self.metrics)
+            print(f"🎯 Using equal initialization")
         
         # Constraints: weights sum to 1
         constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
@@ -589,19 +681,25 @@ def main():
     parser.add_argument("--no-resume", action="store_true", help="Start fresh instead of resuming from existing files")
     parser.add_argument("--regularization", choices=['none', 'l1', 'l2', 'entropy'], default='none', help="Regularization method")
     parser.add_argument("--reg-strength", type=float, default=0.01, help="Regularization strength")
+    parser.add_argument("--random-init", action="store_true", help="Use random weight initialization instead of equal")
+    parser.add_argument("--min-samples", type=int, default=50, help="Minimum samples required per participant")
     
     args = parser.parse_args()
     
     print("🚀 Metric Weight Optimization")
     print("=" * 40)
     print(f"📊 Regularization: {args.regularization} (strength: {args.reg_strength})")
+    print(f"🎲 Random initialization: {args.random_init}")
+    print(f"🔍 Minimum samples per participant: {args.min_samples}")
     
     # Initialize optimizer with output file for incremental writing
     optimizer = MetricOptimizer(
         output_file=args.output, 
         resume=not args.no_resume,
         regularization=args.regularization,
-        reg_strength=args.reg_strength
+        reg_strength=args.reg_strength,
+        random_init=args.random_init,
+        min_samples=args.min_samples
     )
     
     # Load data
@@ -610,6 +708,9 @@ def main():
     
     # Set random seed for reproducibility
     np.random.seed(42)
+    
+    # Run sanity check before optimization
+    optimizer.sanity_check_objective()
     
     # Optimize weights
     if args.cross_validate:

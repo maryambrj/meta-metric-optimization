@@ -117,23 +117,12 @@ cd core_scripts && python metric_correlation_optimization.py --dataset causal_re
     └── 📁 README_and_docs/             # Original documentation
 ```
 
-## Archived Components
-
-Unused components have been moved to `archived_components/` for reference:
-
-- **`elo_ranking_framework/`**: Auto-Elo ranking system files
-- **`logistic_regression_prediction/`**: Pairwise logistic regression for winner/loser prediction
-- **`README_and_docs/`**: Original comprehensive documentation
-
 ## Requirements
 
 - Python 3.7+
 - pip
 - **Optional**: CUDA-compatible GPU for BLEURT acceleration
 
-## License
-
-This project is licensed under the MIT License.
 
 
 
@@ -237,3 +226,8 @@ metric_optimization.py
   The optimization analyzes sample distribution fairness
    and shows correlations with different minimum sample
   thresholds (10, 50, 100 samples per participant).
+
+
+
+
+metric_optimization.py --output test_resume_demo.csv --no-resume
