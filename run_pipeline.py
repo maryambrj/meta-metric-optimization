@@ -85,30 +85,13 @@ def check_dependencies(dataset_name='causal_relations'):
 
 def run_data_processing(dataset_name='causal_relations'):
     """Run data preprocessing step"""
-    if dataset_name == 'hh_rlhf':
-        # For HH-RLHF, run the dataset loader
-        script_path = os.path.join(CORE_SCRIPTS_DIR, "hh_rlhf_loader.py")
-        if not os.path.exists(script_path):
-            print(f"❌ HH-RLHF loader script not found: {script_path}")
-            return False
-        cmd = f"cd '{CORE_SCRIPTS_DIR}' && python hh_rlhf_loader.py --dataset_name {dataset_name}"
-        return run_command(cmd, f"Loading {dataset_name} dataset")
-    elif dataset_name == 'summarize_feedback':
-        # For summarize-feedback, run the dataset loader
-        script_path = os.path.join(CORE_SCRIPTS_DIR, "summarize_feedback_loader.py")
-        if not os.path.exists(script_path):
-            print(f"❌ Summarize-feedback loader script not found: {script_path}")
-            return False
-        cmd = f"cd '{CORE_SCRIPTS_DIR}' && python summarize_feedback_loader.py --dataset_name {dataset_name}"
-        return run_command(cmd, f"Loading {dataset_name} dataset")
-    else:
-        # For causal_relations, run the original data processing
-        script_path = os.path.join(CORE_SCRIPTS_DIR, "data_processing.py")
-        if not os.path.exists(script_path):
-            print(f"❌ Data processing script not found: {script_path}")
-            return False
-        cmd = f"cd '{CORE_SCRIPTS_DIR}' && python data_processing.py"
-        return run_command(cmd, "Running data preprocessing")
+    # For causal_relations, run the original data processing
+    script_path = os.path.join(CORE_SCRIPTS_DIR, "data_processing.py")
+    if not os.path.exists(script_path):
+        print(f"❌ Data processing script not found: {script_path}")
+        return False
+    cmd = f"cd '{CORE_SCRIPTS_DIR}' && python data_processing.py"
+    return run_command(cmd, "Running data preprocessing")
 
 def run_metric_calculation(dataset_name='causal_relations'):
     """Run metric calculation step"""
@@ -200,7 +183,7 @@ def main():
     parser = argparse.ArgumentParser(description="Meta-Metric Optimization Pipeline")
     parser.add_argument("--step", choices=["data", "metrics", "optimization", "all"], 
                        default="all", help="Which step to run")
-    parser.add_argument("--dataset", choices=["causal_relations", "hh_rlhf", "summarize_feedback"], 
+    parser.add_argument("--dataset", choices=["causal_relations"], 
                        default="causal_relations", help="Which dataset to use")
     parser.add_argument("--skip-checks", action="store_true", 
                        help="Skip dependency checks")
