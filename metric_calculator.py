@@ -39,17 +39,19 @@ sys.path.insert(0, project_root)
 class MetricCalculator:
     """Calculate multiple NLP metrics for summarization quality"""
     
-    def __init__(self, use_gpu=True, batch_size=32):
+    def __init__(self, use_gpu=True, batch_size=32, bleurt_checkpoint=None):
         """
         Initialize metric calculator
         
         Args:
             use_gpu (bool): Whether to use GPU for BLEURT
             batch_size (int): Batch size for GPU processing
+            bleurt_checkpoint (str): Path to BLEURT checkpoint
         """
         self.use_gpu = use_gpu
         self.batch_size = batch_size
         self.bleurt_scorer = None
+        self.bleurt_checkpoint_path = bleurt_checkpoint
         
         # Download required NLTK data
         self._download_nltk_data()
@@ -91,11 +93,40 @@ class MetricCalculator:
     def _initialize_bleurt(self):
         """Initialize BLEURT scorer"""
         try:
-            # Check for BLEURT checkpoint
-            bleurt_checkpoint = os.path.join(project_root, 'BLEURT-20')
-            if not os.path.exists(bleurt_checkpoint):
-                print("⚠️ BLEURT-20 checkpoint not found, BLEURT scores will be 0")
-                return
+            # Use provided checkpoint path or search for it
+            if self.bleurt_checkpoint_path:
+                if os.path.exists(self.bleurt_checkpoint_path):
+                    bleurt_checkpoint = self.bleurt_checkpoint_path
+                    print(f"✅ Using provided BLEURT checkpoint: {bleurt_checkpoint}")
+                else:
+                    print(f"❌ Provided BLEURT checkpoint not found: {self.bleurt_checkpoint_path}")
+                    return
+            else:
+                # Check for BLEURT checkpoint - try multiple possible paths
+                checkpoint_paths = [
+                    os.path.join(project_root, 'bleurt', 'test_checkpoint'),
+                    os.path.join(project_root, 'BLEURT-20'),
+                    os.path.join(project_root, 'bleurt', 'BLEURT-20'),
+                    'bleurt/test_checkpoint',
+                    'BLEURT-20'
+                ]
+                
+                bleurt_checkpoint = None
+                for path in checkpoint_paths:
+                    if os.path.exists(path):
+                        # Check if it contains required files
+                        if (os.path.exists(os.path.join(path, 'saved_model.pb')) or 
+                            os.path.exists(os.path.join(path, 'pytorch_model.bin'))):
+                            bleurt_checkpoint = path
+                            print(f"✅ Found BLEURT checkpoint at: {bleurt_checkpoint}")
+                            break
+                
+                if bleurt_checkpoint is None:
+                    print("⚠️ BLEURT checkpoint not found, BLEURT scores will be 0")
+                    print("   Searched paths:")
+                    for path in checkpoint_paths:
+                        print(f"     - {path}")
+                    return
             
             # Configure GPU
             if self.use_gpu:
@@ -436,6 +467,7 @@ def main():
     parser.add_argument("--no-gpu", action="store_true", help="Disable GPU usage")
     parser.add_argument("--max-samples", type=int, help="Limit number of samples (for testing)")
     parser.add_argument("--output", default="metric_scores.csv", help="Output file path")
+    parser.add_argument("--bleurt-checkpoint", type=str, help="Path to BLEURT checkpoint (e.g., 'bleurt/test_checkpoint')")
     
     args = parser.parse_args()
     
@@ -455,7 +487,11 @@ def main():
     
     # Initialize metric calculator
     use_gpu = not args.no_gpu
-    calculator = MetricCalculator(use_gpu=use_gpu, batch_size=args.batch_size)
+    calculator = MetricCalculator(
+        use_gpu=use_gpu, 
+        batch_size=args.batch_size, 
+        bleurt_checkpoint=args.bleurt_checkpoint
+    )
     
     # Process dataset
     start_time = time.time()
