@@ -88,34 +88,6 @@ cd core_scripts && python metric_correlation_optimization.py --dataset causal_re
   - Individual metric correlations
   - Optimal weight distribution
 
-## Project Structure
-
-```
-├── README.md                           # This file
-├── requirements.txt                    # Python dependencies
-├── run_pipeline.py                     # Main pipeline script
-├── config.py                           # Configuration
-│
-├── 📁 core_scripts/
-│   ├── calc_metrics.py                 # Metric calculation
-│   ├── data_processing.py              # Data preprocessing
-│   ├── linear_optimization.py          # Pipeline compatibility wrapper
-│   ├── metric_correlation_optimization.py # Core optimization logic
-│   └── reg_test.py                     # Regression testing
-│
-├── 📁 datasets/causal_relations/       # Causal relations dataset
-│   ├── 📁 annotations/                 # Human and LLM annotations
-│   ├── 📁 data/                        # Processed data
-│   └── 📁 rankings/                    # Analysis results
-│
-├── 📁 BLEURT-20/                       # BLEURT checkpoint
-├── 📁 bleurt/                          # BLEURT framework
-│
-└── 📁 archived_components/             # Archived unused components
-    ├── 📁 elo_ranking_framework/       # Auto-Elo ranking files
-    ├── 📁 logistic_regression_prediction/ # Logistic regression components
-    └── 📁 README_and_docs/             # Original documentation
-```
 
 ## Requirements
 

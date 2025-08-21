@@ -43,6 +43,9 @@ class MetricOptimizer:
         self.reg_strength = reg_strength
         self.random_init = random_init
         self.min_samples = min_samples
+        self.optimizer_method = optimizer_method  # 'slsqp', 'random', 'nelder-mead'
+        self.best_sanity_weights = None
+        self.best_sanity_correlation = -np.inf
         
         # Initialize output files if provided
         if self.output_file:
@@ -123,34 +126,29 @@ class MetricOptimizer:
     
     def _write_iteration_results(self, weights, correlation, results_df):
         """Write results for current iteration"""
-        try:
-            self.iteration_count += 1
-            
-            # Write weights
-            with open(self.weights_file, 'a') as f:
-                weight_str = ",".join(f"{w:.6f}" for w in weights)
-                f.write(f"{self.iteration_count},{weight_str},{correlation:.6f}\n")
-            
-            # Write detailed results
-            # results_df here is `merged` with these columns available:
-            # ['participant','metric_rank','metric_score','player','rank','final_rating']
-            with open(self.output_file, 'a') as f:
-                for _, row in results_df.iterrows():
-                    f.write(
-                        f"{self.iteration_count},{row['participant']},{row['metric_rank']},"
-                        f"{row['metric_score']:.6f},{row['rank']},{row['final_rating']:.2f},{correlation:.6f}\n"
-                    )
-            
-            # Update summary
-            with open(self.summary_file, 'a') as f:
-                f.write(f"\nIteration {self.iteration_count}:\n")
-                f.write(f"  Correlation: {correlation:.6f}\n")
-                f.write(f"  Weights: {dict(zip(self.metrics, weights))}\n")
-            
-            print(f"💾 Saved iteration {self.iteration_count} results (correlation: {correlation:.4f})")
-            
-        except Exception as e:
-            print(f"⚠️ Warning: Could not write iteration results: {e}")
+        self.iteration_count += 1
+        
+        # Write weights
+        with open(self.weights_file, 'a') as f:
+            f.write(f"{self.iteration_count}," + ",".join(f"{w:.6f}" for w in weights) + f",{correlation:.6f}\n")
+        
+        # Write detailed results
+        # results_df here is `merged` with these columns available:
+        # ['participant','metric_rank','metric_score','player','rank','final_rating']
+        with open(self.output_file, 'a') as f:
+            for _, row in results_df.iterrows():
+                f.write(
+                    f"{self.iteration_count},{row['participant']},{row['metric_rank']},"
+                    f"{row['metric_score']:.6f},{row['rank']},{row['final_rating']:.2f},{correlation:.6f}\n"
+                )
+        
+        # Update summary
+        with open(self.summary_file, 'a') as f:
+            f.write(f"\nIteration {self.iteration_count}:\n")
+            f.write(f"  Correlation: {correlation:.6f}\n")
+            f.write(f"  Weights: {dict(zip(self.metrics, weights))}\n")
+        
+        print(f"💾 Saved iteration {self.iteration_count} results (correlation: {correlation:.4f})")
     
     def load_data(self, metric_file, elo_file):
         """Load metric scores and Elo rankings"""
@@ -344,19 +342,33 @@ class MetricOptimizer:
         
         print(f"✅ Cleaned names for robust matching")
     
-    def sanity_check_objective(self):
-        """Test objective function with random weights to verify it's not stuck"""
-        print("🔍 Sanity check: Testing objective with random weights...")
+    def sanity_check_objective(self, n_candidates=16):
+        """Test objective function and find best warm start candidate"""
+        print(f"🔍 Sanity check: Testing objective with {n_candidates+1} weight candidates...")
+        
+        # Include equal weights + random candidates
+        rng = np.random.default_rng(0)  # Fixed seed for reproducibility
+        candidates = [np.ones(len(self.metrics)) / len(self.metrics)]  # Equal weights
+        candidates.extend(rng.dirichlet(np.ones(len(self.metrics)), size=n_candidates))
         
         correlations = []
-        for i, w in enumerate(np.random.dirichlet(np.ones(len(self.metrics)), size=5)):
+        weights_list = []
+        
+        for i, w in enumerate(candidates):
             try:
                 obj_value = self.objective_function(w)
                 correlation = -obj_value  # Remove negative sign to get actual correlation
                 correlations.append(correlation)
+                weights_list.append(w)
+                
+                # Track best candidate for warm starting
+                if correlation > self.best_sanity_correlation:
+                    self.best_sanity_correlation = correlation
+                    self.best_sanity_weights = w.copy()
                 
                 weight_str = ", ".join(f"{metric}:{weight:.3f}" for metric, weight in zip(self.metrics, w))
-                print(f"   Test {i+1}: correlation={correlation:.4f} | weights=({weight_str})")
+                candidate_type = "equal" if i == 0 else "random"
+                print(f"   Test {i+1} ({candidate_type}): correlation={correlation:.4f} | weights=({weight_str})")
             except Exception as e:
                 print(f"   Test {i+1}: ERROR - {e}")
         
@@ -364,20 +376,123 @@ class MetricOptimizer:
             min_corr, max_corr = min(correlations), max(correlations)
             range_corr = max_corr - min_corr
             print(f"📊 Correlation range: {min_corr:.4f} to {max_corr:.4f} (range: {range_corr:.4f})")
+            print(f"🏆 Best sanity check candidate: correlation={self.best_sanity_correlation:.4f}")
             
             if range_corr < 0.001:
                 print("⚠️  WARNING: Very small correlation range - objective might be stuck!")
             else:
                 print("✅ Good variation in correlations - objective function working properly")
+                print(f"🚀 Will use best candidate as warm start for optimization")
         else:
             print("❌ All tests failed - check objective function implementation")
     
-    def optimize_weights(self):
-        """Find optimal weights using scipy optimization"""
-        print("🔧 Optimizing metric weights...")
+    def _softmax(self, theta):
+        """Stable softmax implementation"""
+        z = np.exp(theta - np.max(theta))
+        return z / z.sum()
+    
+    def optimize_weights_nm(self, restarts=8, maxiter=1200, seed=0):
+        """Nelder-Mead optimization with softmax parameterization and multiple restarts"""
+        print(f"🔺 Running Nelder-Mead with {restarts} restarts (maxiter={maxiter})...")
         
-        # Initial weights
-        if self.random_init:
+        rng = np.random.default_rng(seed)
+        d = len(self.metrics)
+        
+        # Initialize with best sanity check result if available
+        if self.best_sanity_weights is not None:
+            best = (self.best_sanity_weights.copy(), self.best_sanity_correlation)
+            print(f"🚀 Starting with best sanity check result: {self.best_sanity_correlation:.4f}")
+        else:
+            best = (None, -np.inf)
+        
+        for r in range(restarts):
+            # Warm starts: best sanity check, equal, or random
+            if r == 0 and self.best_sanity_weights is not None:
+                # Use best sanity check candidate as first start
+                w0 = self.best_sanity_weights
+                theta0 = np.log(w0 + 1e-12)
+                print(f"   Restart {r+1}: best sanity check initialization (corr={self.best_sanity_correlation:.4f})")
+            elif r == 1:
+                theta0 = np.zeros(d)  # equal weights
+                print(f"   Restart {r+1}: equal weights initialization")
+            else:
+                w0 = rng.dirichlet(np.ones(d))
+                theta0 = np.log(w0 + 1e-12)
+                print(f"   Restart {r+1}: random initialization")
+            
+            def f(theta):
+                w = self._softmax(theta)
+                return self.objective_function(w)  # minimize
+            
+            res = minimize(f, theta0, method="Nelder-Mead",
+                         options={"maxiter": maxiter, "xatol": 1e-3, "fatol": 1e-4, "disp": False})
+            
+            w = self._softmax(res.x)
+            val = -self.objective_function(w)  # correlation with sign flipped back
+            
+            print(f"      Result: correlation = {val:.4f}")
+            
+            if val > best[1]:
+                best = (w, val)
+                print(f"      ✅ New best! correlation = {val:.4f}")
+                
+                # Write best result so far
+                if self.output_file and not np.isnan(val):
+                    participant_scores, _ = self.calculate_participant_scores_filtered(w, self.min_samples)
+                    ranking_data = [{'participant': p, 'metric_score': s} for p, s in participant_scores.items()]
+                    metric_ranking = pd.DataFrame(ranking_data).sort_values('metric_score', ascending=False)
+                    metric_ranking['metric_rank'] = range(1, len(metric_ranking) + 1)
+                    
+                    merged = pd.merge(
+                        metric_ranking[['participant', 'metric_rank', 'metric_score']], 
+                        self.elo_rankings[['player', 'rank', 'final_rating']], 
+                        left_on='participant', right_on='player', how='inner'
+                    )
+                    
+                    if len(merged) >= 2:
+                        self._write_iteration_results(w, val, merged)
+        
+        print(f"✅ Nelder-Mead complete! Best correlation: {best[1]:.4f}")
+        return best  # (weights, correlation)
+    
+    def optimize_weights_random(self, n=5000, seed=0):
+        """Dead-simple random search on the simplex"""
+        print(f"🎲 Running random search with {n:,} trials...")
+        
+        rng = np.random.default_rng(seed)
+        W = rng.dirichlet(np.ones(len(self.metrics)), size=n)
+        scores = np.array([-self.objective_function(w) for w in W])  # higher is better
+        i = scores.argmax()
+        
+        best_weights = W[i]
+        best_correlation = scores[i]
+        
+        print(f"✅ Random search complete! Best correlation: {best_correlation:.4f}")
+        return best_weights, best_correlation
+    
+    def optimize_weights(self):
+        """Find optimal weights using selected optimization method"""
+        print(f"🔧 Optimizing metric weights using {self.optimizer_method}...")
+        
+        if self.optimizer_method == 'random':
+            return self.optimize_weights_random()
+        elif self.optimizer_method == 'nelder-mead':
+            return self.optimize_weights_nm()
+        elif self.optimizer_method == 'slsqp':
+            return self.optimize_slsqp()
+        else:
+            print(f"⚠️ Unknown optimizer: {self.optimizer_method}, falling back to SLSQP")
+            return self.optimize_slsqp()
+    
+    def optimize_slsqp(self):
+        """Original SLSQP optimization (kept for comparison)"""
+        print("⚙️ Using SLSQP (gradient-based) optimization...")
+        
+        # Use best sanity check candidate as warm start if available
+        if self.best_sanity_weights is not None:
+            initial_weights = self.best_sanity_weights.copy()
+            print(f"🚀 Using best sanity check as warm start: correlation={self.best_sanity_correlation:.4f}")
+        elif self.random_init:
             # Random initialization to break symmetry
             initial_weights = np.random.dirichlet(np.ones(len(self.metrics)))
             print(f"🎲 Using random initialization: {dict(zip(self.metrics, initial_weights))}")
@@ -406,13 +521,26 @@ class MetricOptimizer:
             optimal_weights = result.x / np.sum(result.x)  # Normalize
             correlation = -result.fun
             
-            print(f"✅ Optimization successful!")
+            # Compare with sanity check baseline
+            if self.best_sanity_weights is not None and correlation < self.best_sanity_correlation:
+                print(f"⚠️ SLSQP result ({correlation:.4f}) worse than sanity check ({self.best_sanity_correlation:.4f})")
+                print(f"🔄 Returning best sanity check result instead")
+                return self.best_sanity_weights, self.best_sanity_correlation
+            
+            print(f"✅ SLSQP optimization successful!")
             print(f"   Final correlation: {correlation:.4f}")
             
             return optimal_weights, correlation
         else:
-            print(f"⚠️ Optimization failed: {result.message}")
-            return initial_weights, 0.0
+            print(f"⚠️ SLSQP optimization failed: {result.message}")
+            
+            # Fallback to best sanity check if available
+            if self.best_sanity_weights is not None:
+                print(f"🔄 Falling back to best sanity check result: {self.best_sanity_correlation:.4f}")
+                return self.best_sanity_weights, self.best_sanity_correlation
+            else:
+                initial_weights = np.ones(len(self.metrics)) / len(self.metrics)
+                return initial_weights, 0.0
     
     def cross_validate_weights(self, n_folds=5):
         """Cross-validate the optimization with different data splits"""
@@ -683,6 +811,7 @@ def main():
     parser.add_argument("--reg-strength", type=float, default=0.01, help="Regularization strength")
     parser.add_argument("--random-init", action="store_true", help="Use random weight initialization instead of equal")
     parser.add_argument("--min-samples", type=int, default=50, help="Minimum samples required per participant")
+    parser.add_argument("--optimizer", choices=['slsqp', 'random', 'nelder-mead'], default='slsqp', help="Optimization method")
     
     args = parser.parse_args()
     
@@ -691,6 +820,7 @@ def main():
     print(f"📊 Regularization: {args.regularization} (strength: {args.reg_strength})")
     print(f"🎲 Random initialization: {args.random_init}")
     print(f"🔍 Minimum samples per participant: {args.min_samples}")
+    print(f"🔧 Optimizer method: {args.optimizer}")
     
     # Initialize optimizer with output file for incremental writing
     optimizer = MetricOptimizer(
@@ -699,7 +829,8 @@ def main():
         regularization=args.regularization,
         reg_strength=args.reg_strength,
         random_init=args.random_init,
-        min_samples=args.min_samples
+        min_samples=args.min_samples,
+        optimizer_method=args.optimizer
     )
     
     # Load data
