@@ -396,8 +396,8 @@ class MetricCalculator:
         
         # Count samples to process
         samples_to_process = []
-        for sample in data:
-            sample_id = sample.get('sample_id', len(samples_to_process))
+        for i, sample in enumerate(data):
+            sample_id = sample.get('sample_id', i)
             if sample_id not in processed_ids:
                 samples_to_process.append(sample)
         
@@ -409,7 +409,7 @@ class MetricCalculator:
         
         # Process remaining samples one by one
         for i, sample in enumerate(samples_to_process):
-            sample_id = sample.get('sample_id', i)
+            sample_id = sample.get('sample_id', len(processed_ids) + i)
             
             # Calculate BLEURT for this sample
             if self.bleurt_scorer is not None:
