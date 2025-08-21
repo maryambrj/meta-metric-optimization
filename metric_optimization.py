@@ -29,7 +29,7 @@ sys.path.insert(0, project_root)
 class MetricOptimizer:
     """Optimize metric weights for maximum correlation with Elo rankings"""
     
-    def __init__(self, output_file=None, resume=True, regularization='none', reg_strength=0.01, random_init=False, min_samples=50):
+    def __init__(self, output_file=None, resume=True, regularization='none', reg_strength=0.01, random_init=False, min_samples=50, optimizer_method='slsqp'):
         self.metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
         self.metric_data = None
         self.elo_rankings = None
