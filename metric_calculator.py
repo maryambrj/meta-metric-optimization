@@ -93,7 +93,16 @@ class MetricCalculator:
     def _initialize_bleurt(self):
         """Initialize BLEURT scorer"""
         try:
-            # Use provided checkpoint path or search for it
+            # Add BLEURT library to Python path
+            bleurt_lib_path = os.path.join(project_root, 'bleurt')
+            if os.path.exists(bleurt_lib_path):
+                sys.path.insert(0, bleurt_lib_path)
+                print(f"✅ Added BLEURT library path: {bleurt_lib_path}")
+            else:
+                print(f"❌ BLEURT library not found at: {bleurt_lib_path}")
+                return
+            
+            # Find BLEURT checkpoint
             if self.bleurt_checkpoint_path:
                 if os.path.exists(self.bleurt_checkpoint_path):
                     bleurt_checkpoint = self.bleurt_checkpoint_path
@@ -102,27 +111,25 @@ class MetricCalculator:
                     print(f"❌ Provided BLEURT checkpoint not found: {self.bleurt_checkpoint_path}")
                     return
             else:
-                # Check for BLEURT checkpoint - try multiple possible paths
+                # Look for BLEURT-20 checkpoint (recommended)
                 checkpoint_paths = [
-                    os.path.join(project_root, 'bleurt', 'test_checkpoint'),
                     os.path.join(project_root, 'BLEURT-20'),
+                    'BLEURT-20',
                     os.path.join(project_root, 'bleurt', 'BLEURT-20'),
-                    'bleurt/test_checkpoint',
-                    'BLEURT-20'
                 ]
                 
                 bleurt_checkpoint = None
                 for path in checkpoint_paths:
                     if os.path.exists(path):
-                        # Check if it contains required files
+                        # Verify it's a valid checkpoint (has saved_model.pb or config files)
                         if (os.path.exists(os.path.join(path, 'saved_model.pb')) or 
-                            os.path.exists(os.path.join(path, 'pytorch_model.bin'))):
+                            os.path.exists(os.path.join(path, 'bleurt_config.json'))):
                             bleurt_checkpoint = path
                             print(f"✅ Found BLEURT checkpoint at: {bleurt_checkpoint}")
                             break
                 
                 if bleurt_checkpoint is None:
-                    print("⚠️ BLEURT checkpoint not found, BLEURT scores will be 0")
+                    print("⚠️ BLEURT-20 checkpoint not found, BLEURT scores will be 0")
                     print("   Searched paths:")
                     for path in checkpoint_paths:
                         print(f"     - {path}")
@@ -139,8 +146,7 @@ class MetricCalculator:
                     print("⚠️ No GPU found, using CPU for BLEURT")
                     self.use_gpu = False
             
-            # Import and initialize BLEURT
-            sys.path.insert(0, os.path.join(project_root, 'bleurt'))
+            # Import and initialize BLEURT scorer
             from bleurt import score
             
             self.bleurt_scorer = score.BleurtScorer(bleurt_checkpoint)
@@ -467,7 +473,7 @@ def main():
     parser.add_argument("--no-gpu", action="store_true", help="Disable GPU usage")
     parser.add_argument("--max-samples", type=int, help="Limit number of samples (for testing)")
     parser.add_argument("--output", default="metric_scores.csv", help="Output file path")
-    parser.add_argument("--bleurt-checkpoint", type=str, help="Path to BLEURT checkpoint (e.g., 'bleurt/test_checkpoint')")
+    parser.add_argument("--bleurt-checkpoint", type=str, help="Path to BLEURT checkpoint (recommended: 'BLEURT-20')")
     
     args = parser.parse_args()
     
