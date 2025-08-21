@@ -115,27 +115,45 @@ class MetricCalculator:
     def calculate_bleu(self, reference, candidate):
         """Calculate BLEU score"""
         try:
+            # Check for empty strings
+            if not reference.strip() or not candidate.strip():
+                return 0.0
+            
             # Tokenize
             ref_tokens = nltk.word_tokenize(reference.lower())
             cand_tokens = nltk.word_tokenize(candidate.lower())
             
+            # Check for empty token lists
+            if not ref_tokens or not cand_tokens:
+                return 0.0
+            
             # Calculate BLEU with smoothing
             smoothing = SmoothingFunction().method1
             score = sentence_bleu([ref_tokens], cand_tokens, smoothing_function=smoothing)
-            return score
-        except:
+            return float(score)
+        except Exception as e:
+            print(f"BLEU calculation error: {e}")
             return 0.0
     
     def calculate_meteor(self, reference, candidate):
         """Calculate METEOR score"""
         try:
+            # Check for empty strings
+            if not reference.strip() or not candidate.strip():
+                return 0.0
+            
             # Tokenize
             ref_tokens = nltk.word_tokenize(reference.lower())
             cand_tokens = nltk.word_tokenize(candidate.lower())
             
+            # Check for empty token lists
+            if not ref_tokens or not cand_tokens:
+                return 0.0
+            
             score = meteor_score([ref_tokens], cand_tokens)
-            return score
-        except:
+            return float(score)
+        except Exception as e:
+            print(f"METEOR calculation error: {e}")
             return 0.0
     
     def calculate_rouge(self, reference, candidate):
@@ -344,8 +362,8 @@ def load_summarization_data():
                         
                         if len(summaries) >= 2:
                             sample = {
-                                'sample_id': len(all_data),
-                                'post_id': info['id'],
+                                'sample_id': len(all_data),  # This will be unique
+                                'post_id': info.get('id', f"post_{len(all_data)}"),
                                 'reference': info['post'],  # Original text as ground truth
                                 'summary1': summaries[0]['text'],
                                 'summary2': summaries[1]['text'],
