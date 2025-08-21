@@ -452,22 +452,10 @@ def print_summary_statistics(results_df):
     print(f"   Avg summary1 length: {results_df['summary1_length'].mean():.1f} words")
     print(f"   Avg summary2 length: {results_df['summary2_length'].mean():.1f} words")
     
-    print(f"\n🎯 Metric Statistics (Summary 1):")
+    print(f"\n🎯 Metric Calculation Complete:")
     metrics = ['bleu', 'meteor', 'rouge1', 'rouge2', 'rougeL', 'verbatim', 'bleurt']
-    for metric in metrics:
-        col = f'summary1_{metric}'
-        if col in results_df.columns:
-            mean_score = results_df[col].mean()
-            std_score = results_df[col].std()
-            print(f"   {metric.upper():<8}: {mean_score:.4f} ± {std_score:.4f}")
-    
-    print(f"\n🎯 Metric Statistics (Summary 2):")
-    for metric in metrics:
-        col = f'summary2_{metric}'
-        if col in results_df.columns:
-            mean_score = results_df[col].mean()
-            std_score = results_df[col].std()
-            print(f"   {metric.upper():<8}: {mean_score:.4f} ± {std_score:.4f}")
+    print(f"   Calculated {len(metrics)} metrics for {len(results_df)} samples")
+    print(f"   Total scores computed: {len(results_df) * len(metrics) * 2:,}")
 
 
 def main():

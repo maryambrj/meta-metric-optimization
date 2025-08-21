@@ -173,3 +173,67 @@ metric_calculator.py
   - summary1_meteor, summary2_meteor
   - summary1_bleurt, summary2_bleurt
   - summary1_verbatim, summary2_verbatim
+
+
+
+metric_optimization.py
+
+  🚀 Usage Examples
+
+  # Basic optimization
+  python metric_optimization.py
+
+  # With cross-validation for robust results
+  python metric_optimization.py --cross-validate
+
+  # Custom files
+  python metric_optimization.py --metric-file
+  my_metrics.csv --elo-file my_elo.csv
+
+  📊 Expected Output
+
+  - Optimal weights for each metric
+  - Spearman correlation achieved
+  - Top 10 comparison between metric and Elo rankings
+  - Saved files: weights, ranking comparison, summary
+
+
+
+
+
+  # Basic optimization
+  python metric_optimization.py
+
+  # With cross-validation for robust results
+  python metric_optimization.py --cross-validate
+
+  # Custom input files
+  python metric_optimization.py --metric-file
+  metric_scores.csv --elo-file datasets/summarize_feedba
+  ck/elo_tournament_results/elo_tournament_rankings.csv
+
+  # Custom output file
+  python metric_optimization.py --output
+  my_optimization_results.csv
+
+  Required Files
+
+  Before running, ensure you have:
+  1. Metric scores: metric_scores.csv (from
+  metric_calculator.py)
+  2. Elo rankings: datasets/summarize_feedback/elo_tourn
+  ament_results/elo_tournament_rankings.csv (from
+  elo_tournament.py)
+
+  Expected Output
+
+  The script will generate:
+  - metric_optimization_results.csv - Ranking comparison
+  - metric_optimization_results_weights.csv - Optimal
+  metric weights
+  - metric_optimization_results_summary.txt - Summary
+  report
+
+  The optimization analyzes sample distribution fairness
+   and shows correlations with different minimum sample
+  thresholds (10, 50, 100 samples per participant).
